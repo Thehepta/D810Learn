@@ -196,14 +196,12 @@ class microcode_viewer_t(kw.simplecustviewer_t):
         dfs(pre_black,pre_black,[],paths,set())
         
         print("branch list"+paths)
-        # for path in paths:
-        #     block_paht=[]
-        #     for serial in path:
-        #         blk = self._mba.get_mblock(serial)
-                # block_paht.append(self._mba.get_mblock(serial))
-                # print(path)
-                # use = blk.build_use_list(pre_black.tail, hr.MUST_ACCESS)
-                # _def = blk.build_def_list(pre_black.tail, hr.MUST_ACCESS)
+
+        for path in paths:
+            block_paht=[]
+            for serial in path:
+                block_paht.append(self._mba.get_mblock(serial))
+
 
                 # print(_def)
                 # print(use)
