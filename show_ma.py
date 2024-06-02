@@ -176,9 +176,10 @@ class microcode_viewer_t(kw.simplecustviewer_t):
             if(pre_num < len(blk.predset)):
                 pre_black = blk
                 pre_num = len(blk.predset)
-        print("Prefaceblock num:",hex(pre_black.serial))
+        print("Prefaceblock num:",hex(pre_black.tail.ea))
         blk_preset_list = [x for x in pre_black.predset]
-        print("Pred list "+blk_preset_list)
+        print("Pred list:")
+        print(blk_preset_list)
 
         def dfs( current_node, target_node, path, paths, visited):
             path.append(current_node.serial)
@@ -194,14 +195,16 @@ class microcode_viewer_t(kw.simplecustviewer_t):
             visited.remove(current_node.serial)
         paths = []
         dfs(pre_black,pre_black,[],paths,set())
-        
-        print("branch list"+paths)
-
-        for path in paths:
-            block_paht=[]
-            for serial in path:
-                block_paht.append(self._mba.get_mblock(serial))
-
+        print("branch list:")
+        print(paths)
+        # for path in paths:
+        #     block_paht=[]
+        #     for serial in path:
+        #         blk = self._mba.get_mblock(serial)
+                # block_paht.append(self._mba.get_mblock(serial))
+                # print(path)
+                # use = blk.build_use_list(pre_black.tail, hr.MUST_ACCESS)
+                # _def = blk.build_def_list(pre_black.tail, hr.MUST_ACCESS)
 
                 # print(_def)
                 # print(use)
