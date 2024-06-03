@@ -9,24 +9,6 @@ import ida_range
 import ida_pro
 import idaapi
 
-
-class printer_t(hr.vd_printer_t):
-    """Converts microcode output to an array of strings."""
-
-    def __init__(self, *args):
-        hr.vd_printer_t.__init__(self)
-        self.mc = []
-
-    def get_mc(self):
-        return self.mc
-
-    def _print(self, indent, line):
-        print(self.hdrlines)
-        print(type(self.thisown))
-        self.mc.append(line)
-        return 1
-
-
 # -----------------------------------------------------------------------------
 
 def ask_desired_maturity():
@@ -166,8 +148,8 @@ class microcode_viewer_t(kw.simplecustviewer_t):
             print("Failed to display the graph")
 
     def dominanceFlow(self):
-        # import pydevd_pycharm
-        # pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
+        import pydevd_pycharm
+        pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
         pre_black = None
         pre_num = -1
         for blk_idx in range(self._mba.qty):
@@ -176,7 +158,7 @@ class microcode_viewer_t(kw.simplecustviewer_t):
             if(pre_num < len(blk.predset)):
                 pre_black = blk
                 pre_num = len(blk.predset)
-        print("Prefaceblock num:",hex(pre_black.tail.ea))
+        print("Prefaceblock num:",hex(pre_black.serial))
         blk_preset_list = [x for x in pre_black.predset]
         print("Pred list:")
         print(blk_preset_list)
@@ -197,12 +179,30 @@ class microcode_viewer_t(kw.simplecustviewer_t):
         dfs(pre_black,pre_black,[],paths,set())
         print("branch list:")
         print(paths)
-        # for path in paths:
-        #     block_paht=[]
-        #     for serial in path:
-        #         blk = self._mba.get_mblock(serial)
-                # block_paht.append(self._mba.get_mblock(serial))
-                # print(path)
+        cond_mod_t = pre_black.tail.l
+        print("cond var:",cond_mod_t.dstr())
+        cond_ml = hr.mlist_t()
+        blk.append_use_list(cond_ml, cond_mod_t, hr.MUST_ACCESS)
+        for path in paths:
+            block_paht=[]
+            for serial in path:
+                blk = self._mba.get_mblock(serial)
+                cur_ins = blk.head
+                while cur_ins is not None:
+                    def_list = blk.build_def_list(cur_ins, hr.MAY_ACCESS | hr.FULL_XDSU)
+                    # for defs in def_list:
+                    if cond_ml.has_common(def_list):
+                        print(path)
+                        print(cur_ins.dstr())
+                    #     print(def_list.dstr())
+                    #     break
+                    cur_ins = cur_ins.next
+
+
+                # block_paht.append(blk)
+
+
+
                 # use = blk.build_use_list(pre_black.tail, hr.MUST_ACCESS)
                 # _def = blk.build_def_list(pre_black.tail, hr.MUST_ACCESS)
 
@@ -328,8 +328,7 @@ def show_microcode():
     mba = hr.gen_microcode(mbr, hf, ml, hr.DECOMP_WARNINGS, mmat)
     if not mba:
         return (False, "0x%s: %s" % (addr_fmt % hf.errea, hf.desc()))
-    vp = printer_t()
-    mc = []
+
     mba.set_mba_flags(mba.get_mba_flags() | mba_flags)
     mcv = microcode_viewer_t()
     if not mcv.Create(mba, "%s (%s)" % (fn_name, text), text, fn_name):
