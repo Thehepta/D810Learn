@@ -44,15 +44,15 @@ class UnflattenerFakeJump(optblock_t):
         if len(self.dispatcher_list) == 0:
             print("No dispatcher found at maturity {0}".format(self.mba.maturity))
             return 0
-        # self.last_pass_nb_patch_done = self.remove_flattening()
+        self.last_pass_nb_patch_done = self.remove_flattening()
 
         # nb_clean = mba_deep_cleaning(self.mba, False)
         return 0
 
 
     def start(self):
-        import pydevd_pycharm
-        pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
+        # import pydevd_pycharm
+        # pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
         sel, sea, eea = kw.read_range_selection(None)
         pfn = ida_funcs.get_func(kw.get_screen_ea())
         if not sel and not pfn:

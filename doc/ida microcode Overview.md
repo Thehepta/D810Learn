@@ -30,3 +30,11 @@ CTree主要是通过下面的几个类来表示的：
 + vdloc_t 使用 micro 寄存器number，而不是 processor 寄存器number。
 + vdloc_t 中的栈偏移绝对不会是负数，而argloc_t则可能是负数。
 上面这些就是在头文件中所有重要的类了，另外还有很多辅助的类，请查阅头文件来查看它们的定义。(译者注：请注意这里提到的这个hexrays.hpp头文件，它有一万多行代码！)
+
+
+### ida py类信息
+https://hex-rays.com/products/decompiler/manual/sdk/annotated.shtml
+
+
+###  Hex-Rays Decompiler - User Manual
+https://hex-rays.com/products/decompiler/manual/
