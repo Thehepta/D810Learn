@@ -5,7 +5,9 @@ import ida_funcs
 import ida_ida
 import ida_range
 from d810.hexrays_formatters import format_mop_list
+from d810.hexrays_helpers import  append_mop_if_not_in_list
 from d810.optimizers.flow.flattening.generic import GenericDispatcherBlockInfo
+from d810.optimizers.flow.flattening.generic import GenericDispatcherInfo
 from d810.optimizers.flow.flattening.unflattener import OllvmDispatcherCollector
 from d810.optimizers.flow.flattening.utils import NotResolvableFatherException, get_all_possibles_values
 from d810.tracker import MopHistory, MopTracker
@@ -15,8 +17,60 @@ import ida_kernwin as kw
 import logging
 
 
+class adjustOllvmDispatcherInfo(GenericDispatcherInfo):
+
+    def explore(self, blk: mblock_t) -> bool:
+        self.reset()
+        if not self._is_candidate_for_dispatcher_entry_block(blk):
+            return False
+        self.entry_block = GenericDispatcherBlockInfo(blk)
+        self.entry_block.parse()
+        for used_mop in self.entry_block.use_list:
+            append_mop_if_not_in_list(used_mop, self.entry_block.assume_def_list)
+        self.dispatcher_internal_blocks.append(self.entry_block)
+        num_mop, self.mop_compared = self._get_comparison_info(self.entry_block.blk)
+        self.comparison_values.append(num_mop.nnn.value)
+        self._explore_children(self.entry_block)
+        dispatcher_blk_with_external_father = self._get_dispatcher_blocks_with_external_father()
+        # TODO: I think this can be wrong because we are too permissive in detection of dispatcher blocks
+        if len(dispatcher_blk_with_external_father) != 0:
+            return False
+        return True
+class adjustOllvmDispatcherCollector(minsn_visitor_t):
+    DISPATCHER_CLASS = adjustOllvmDispatcherInfo
+
+    def __init__(self):
+        super().__init__()
+        self.dispatcher_list = []
+        self.explored_blk_serials = []
+    def visit_minsn(self):
+        if self.blk.serial in self.explored_blk_serials:
+            return 0
+        self.explored_blk_serials.append(self.blk.serial)
+        disp_info = self.DISPATCHER_CLASS(self.blk.mba)
+        is_good_candidate = disp_info.explore(self.blk)
+        if not is_good_candidate:
+            return 0
+        if not self.specific_checks(disp_info):
+            return 0
+        self.dispatcher_list.append(disp_info)
+        return 0
+
+    def reset(self):
+        self.dispatcher_list = []
+        self.explored_blk_serials = []
+
+    def get_dispatcher_list(self) -> List[GenericDispatcherInfo]:
+        self.remove_sub_dispatchers()
+        return self.dispatcher_list
+
+
+
+
+
+
 class UnflattenerFakeJump(optblock_t):
-    DISPATCHER_COLLECTOR_CLASS = OllvmDispatcherCollector
+    DISPATCHER_COLLECTOR_CLASS = adjustOllvmDispatcherCollector
     DEFAULT_MAX_PASSES = 5
     DEFAULT_MAX_DUPLICATION_PASSES = 20
 
@@ -51,8 +105,8 @@ class UnflattenerFakeJump(optblock_t):
 
 
     def start(self):
-        # import pydevd_pycharm
-        # pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
+        import pydevd_pycharm
+        pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
         sel, sea, eea = kw.read_range_selection(None)
         pfn = ida_funcs.get_func(kw.get_screen_ea())
         if not sel and not pfn:
@@ -110,7 +164,7 @@ class UnflattenerFakeJump(optblock_t):
                 except NotResolvableFatherException as e:
                     print("NotResolvableFatherException")
 
-    def resolve_dispatcher_father(self, dispatcher_father, dispatcher_info):
+    def resolve_dispatcher_father(self, dispatcher_father: mblock_t, dispatcher_info):
         dispatcher_father_histories = self.get_dispatcher_father_histories(dispatcher_father,
                                                                            dispatcher_info.entry_block)
         # father_is_resolvable = self.check_if_histories_are_resolved(dispatcher_father_histories)
@@ -119,6 +173,7 @@ class UnflattenerFakeJump(optblock_t):
         mop_searched_values_list = get_all_possibles_values(dispatcher_father_histories,
                                                             dispatcher_info.entry_block.use_before_def_list,
                                                             verbose=False)
+
         ref_mop_searched_values = mop_searched_values_list[0]
         for tmp_mop_searched_values in mop_searched_values_list:
             if tmp_mop_searched_values != ref_mop_searched_values:
