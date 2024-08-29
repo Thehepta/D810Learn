@@ -108,7 +108,7 @@ class adjustOllvmDispatcherInfo(GenericDispatcherInfo):
 
 
 
-class adjustOllvmDispatcherCollector():
+class adjustOllvmDispatcherCollector(minsn_visitor_t):
     DISPATCHER_CLASS = adjustOllvmDispatcherInfo
     DEFAULT_DISPATCHER_MIN_INTERNAL_BLOCK = 2
     DEFAULT_DISPATCHER_MIN_EXIT_BLOCK = 3
@@ -127,6 +127,18 @@ class adjustOllvmDispatcherCollector():
         self.dispatcher_list.append(disp_info)
         return True
 
+    def visit_minsn(self):
+        if self.blk.serial in self.explored_blk_serials:
+            return 0
+        self.explored_blk_serials.append(self.blk.serial)
+        disp_info = self.DISPATCHER_CLASS(self.blk.mba)
+        is_good_candidate = disp_info.explore(self.blk)
+        if not is_good_candidate:
+            return 0
+        if not self.specific_checks(disp_info):
+            return 0
+        self.dispatcher_list.append(disp_info)
+        return 0
 
     def remove_sub_dispatchers(self):
         main_dispatcher_list = []
@@ -147,12 +159,6 @@ class adjustOllvmDispatcherCollector():
     def get_dispatcher_list(self) -> List[GenericDispatcherInfo]:
         self.remove_sub_dispatchers()
         return self.dispatcher_list
-
-    def collector(self, mba):
-        for blk_idx in range(mba.qty):
-            blk = mba.get_mblock(blk_idx)
-            insn = blk.head
-
 
 
 class UnflattenerFakeJump(optblock_t):
@@ -241,8 +247,8 @@ class UnflattenerFakeJump(optblock_t):
     def retrieve_all_dispatchers(self):
         self.dispatcher_list = []
         self.dispatcher_collector.reset()
-        self.dispatcher_collector.collector(self.mba)
-        self.dispatcher_list = [x for x in self.zdispatcher_collector.get_dispatcher_list()]
+        self.mba.for_all_topinsns(self.dispatcher_collector)
+        self.dispatcher_list = [x for x in self.dispatcher_collector.get_dispatcher_list()]
 
     def remove_flattening(self) -> int:
         for dispatcher_info in self.dispatcher_list:

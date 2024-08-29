@@ -144,15 +144,15 @@ class adjustOllvmDispatcherCollector():
         self.dispatcher_list = []
         self.explored_blk_serials = []
 
-    def get_dispatcher_list(self) -> List[GenericDispatcherInfo]:
-        self.remove_sub_dispatchers()
+    def get_dispatcher_list(self) -> List[mblock_t]:
+        # self.remove_sub_dispatchers()
         return self.dispatcher_list
 
     def collector(self, mba):
         for blk_idx in range(mba.qty):
             blk = mba.get_mblock(blk_idx)
-            insn = blk.head
-
+            if blk.serial == 2:
+                self.dispatcher_list.append(blk)
 
 
 class UnflattenerFakeJump(optblock_t):
@@ -215,7 +215,7 @@ class UnflattenerFakeJump(optblock_t):
         if not ida_bytes.is_code(F):
             return (False, "The selected range must start with an instruction")
         text = "unfla"
-        mmat = hr.MMAT_GLBOPT1
+        mmat = hr.MMAT_GLBOPT3
         if text is None and mmat is None:
             return (True, "Cancelled")
 
@@ -227,14 +227,15 @@ class UnflattenerFakeJump(optblock_t):
 
         hf = hr.hexrays_failure_t()
         ml = hr.mlist_t()
+        #
         self.mba = hr.gen_microcode(mbr, hf, ml, hr.DECOMP_WARNINGS, mmat)
 
         self.retrieve_all_dispatchers()
-        print("dispatcher_list = ",len(self.dispatcher_list))
-        if len(self.dispatcher_list) == 0:
-            print("No dispatcher found at maturity {0}".format(self.mba.maturity))
-            return 0
-        self.last_pass_nb_patch_done = self.remove_flattening()
+        # print("dispatcher_list = ",len(self.dispatcher_list))
+        # if len(self.dispatcher_list) == 0:
+        #     print("No dispatcher found at maturity {0}".format(self.mba.maturity))
+        #     return 0
+        # self.last_pass_nb_patch_done = self.remove_flattening()
 
 
 
@@ -242,7 +243,7 @@ class UnflattenerFakeJump(optblock_t):
         self.dispatcher_list = []
         self.dispatcher_collector.reset()
         self.dispatcher_collector.collector(self.mba)
-        self.dispatcher_list = [x for x in self.zdispatcher_collector.get_dispatcher_list()]
+        self.dispatcher_list = [x for x in self.dispatcher_collector.get_dispatcher_list()]
 
     def remove_flattening(self) -> int:
         for dispatcher_info in self.dispatcher_list:
