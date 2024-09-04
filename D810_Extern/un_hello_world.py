@@ -7,7 +7,7 @@ import ida_range
 from d810.hexrays_formatters import format_mop_list
 from d810.cfg_utils import mba_deep_cleaning
 from d810.hexrays_helpers import append_mop_if_not_in_list, extract_num_mop
-from d810.optimizers.flow.flattening.generic import GenericDispatcherBlockInfo
+from d810.optimizers.flow.flattening.generic import GenericDispatcherBlockInfo, GenericDispatcherUnflatteningRule
 from d810.optimizers.flow.flattening.generic import GenericDispatcherInfo
 from d810.optimizers.flow.flattening.unflattener import OllvmDispatcherCollector
 from d810.optimizers.flow.flattening.utils import NotResolvableFatherException, get_all_possibles_values, \
@@ -137,7 +137,7 @@ class adjustOllvmDispatcherCollector():
                     self.dispatcher_list.append(disp_info)
 
 
-class UnflattenerFakeJump(optblock_t):
+class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
     DISPATCHER_COLLECTOR_CLASS = adjustOllvmDispatcherCollector
     DEFAULT_MAX_PASSES = 5
     DEFAULT_MAX_DUPLICATION_PASSES = 20
