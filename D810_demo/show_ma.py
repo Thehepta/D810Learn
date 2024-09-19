@@ -91,7 +91,7 @@ class microcode_viewer_t(kw.simplecustviewer_t):
         return True
 
     def OnKeydown(self, vkey, shift):   #响应键盘事件  快捷键
-        if vkey == ord("G"):
+        if vkey == ord("X"):
             self.xref()
         if vkey == ord("D"):
             self.dominanceFlow()
@@ -210,6 +210,9 @@ class microcode_viewer_t(kw.simplecustviewer_t):
                 # print(use)
 
     def xref(self):
+        import pydevd_pycharm
+        pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
+
         # print(self.GetLine(self.GetLineNo()))   #打印出这一行的字符串
         # print()               #打印行号
         selectCurrentWord = self.GetCurrentWord()
@@ -222,15 +225,16 @@ class microcode_viewer_t(kw.simplecustviewer_t):
         mop_l_str = ins_token.l.dstr()
         mop_d_str = ins_token.d.dstr()
 
-        if selectCurrentWord.find(mop_r_str) != -1:
-            print(mop_r_str)
-            show_xrefs(self._mba,ins_token,ins_token.r)
+
         if selectCurrentWord.find(mop_l_str) != -1:
             print(mop_l_str)
             show_xrefs(self._mba,ins_token,ins_token.l)
         if selectCurrentWord.find(mop_d_str) != -1:
             print(mop_d_str)
             show_xrefs(self._mba,ins_token,ins_token.d)
+        if selectCurrentWord.find(mop_r_str) != -1:
+            print(mop_r_str)
+            show_xrefs(self._mba,ins_token,ins_token.r)
 
         # print(mop_l_str,mop_r_str,mop_d_str)
         # print(selectCurrentWord)
@@ -263,8 +267,6 @@ def show_xrefs(mba,instr,mop):
         insn = blk.head
         index = 0
         while insn:
-            line = "{0}.{1}\t{2}    {3}".format(blk_idx, index, hex(insn.ea), insn.dstr())
-
             if insn == blk.tail:
                 break
             insn = insn.next

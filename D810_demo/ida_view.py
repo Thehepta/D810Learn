@@ -10,14 +10,8 @@ ACTION_SHORTCUT = "Ctrl+Shift+G"
 ACTION_NAME = "my:clearview"
 
 
-
-
-
-
-
-
 class display_graph_ah_t(ida_kernwin.action_handler_t):
-    def __init__(self):
+    def  __init__(self):
         ida_kernwin.action_handler_t.__init__(self)
 
     def activate(self, ctx):
@@ -27,7 +21,6 @@ class display_graph_ah_t(ida_kernwin.action_handler_t):
     def update(self, ctx):
         print("update")
         return ida_kernwin.AST_ENABLE_ALWAYS
-
 
 
 
