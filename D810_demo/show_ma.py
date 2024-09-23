@@ -148,8 +148,8 @@ class microcode_viewer_t(kw.simplecustviewer_t):
             print("Failed to display the graph")
 
     def dominanceFlow(self):
-        import pydevd_pycharm
-        pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
+        # import pydevd_pycharm
+        # pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
         pre_black = None
         pre_num = -1
         for blk_idx in range(self._mba.qty):
@@ -184,19 +184,19 @@ class microcode_viewer_t(kw.simplecustviewer_t):
         cond_ml = hr.mlist_t()
         blk.append_use_list(cond_ml, cond_mod_t, hr.MUST_ACCESS)
         for path in paths:
-            block_paht=[]
-            for serial in path:
-                blk = self._mba.get_mblock(serial)
-                cur_ins = blk.head
-                while cur_ins is not None:
-                    def_list = blk.build_def_list(cur_ins, hr.MAY_ACCESS | hr.FULL_XDSU)
+            print(path)
+            # for serial in path:
+            #     blk = self._mba.get_mblock(serial)
+            #     cur_ins = blk.head
+            #     while cur_ins is not None:
+            #         def_list = blk.build_def_list(cur_ins, hr.MAY_ACCESS | hr.FULL_XDSU)
                     # for defs in def_list:
-                    if cond_ml.has_common(def_list):
-                        print(path)
-                        print(cur_ins.dstr())
+                    # if cond_ml.has_common(def_list):
+                        # print(path)
+                        # print(cur_ins.dstr())
                     #     print(def_list.dstr())
                     #     break
-                    cur_ins = cur_ins.next
+                    # cur_ins = cur_ins.next
 
 
                 # block_paht.append(blk)
@@ -210,8 +210,8 @@ class microcode_viewer_t(kw.simplecustviewer_t):
                 # print(use)
 
     def xref(self):
-        import pydevd_pycharm
-        pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
+        # import pydevd_pycharm
+        # pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
 
         # print(self.GetLine(self.GetLineNo()))   #打印出这一行的字符串
         # print()               #打印行号

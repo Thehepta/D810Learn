@@ -18,6 +18,7 @@ import ida_hexrays as hr
 import ida_kernwin as kw
 import logging
 
+
 FLATTENING_JUMP_OPCODES = [hr.m_jnz, hr.m_jz, hr.m_jae, hr.m_jb, hr.m_ja, hr.m_jbe,hr.m_jg, hr.m_jge, hr.m_jl, hr.m_jle]
 
 class adjustOllvmDispatcherInfo(GenericDispatcherInfo):
@@ -131,9 +132,13 @@ class adjustOllvmDispatcherCollector():
     def collector(self, mba):
         for blk_idx in range(mba.qty):
             blk = mba.get_mblock(blk_idx)
-            if blk.serial == 2:
+            if blk.serial == 8:
                 disp_info = self.DISPATCHER_CLASS(blk.mba)
-                if True == disp_info.explore(blk):
+                if disp_info.explore(blk):
+                    self.dispatcher_list.append(disp_info)
+            if blk.serial == 3:                              #目前有前有问题，识别分发器错误
+                disp_info = self.DISPATCHER_CLASS(blk.mba)
+                if disp_info.explore(blk):
                     self.dispatcher_list.append(disp_info)
 
 
@@ -153,28 +158,33 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
         self.MOP_TRACKER_MAX_NB_PATH = 100
 
     def func(self, blk: mblock_t):
+
         self.mba = blk.mba
-        if not self.check_if_rule_should_be_used(blk):
-            return 0
-        self.last_pass_nb_patch_done = 0
-        logging.info("Unflattening at maturity {0} pass {1}".format(self.cur_maturity, self.cur_maturity_pass))
         self.retrieve_all_dispatchers()
-        if len(self.dispatcher_list) == 0:
-            logging.info("No dispatcher found at maturity {0}".format(self.mba.maturity))
-            return 0
-        else:
-            logging.info("Unflattening: {0} dispatcher(s) found".format(len(self.dispatcher_list)))
-            for dispatcher_info in self.dispatcher_list:
-                dispatcher_info.print_info()
-            self.last_pass_nb_patch_done = self.remove_flattening()
-        logging.info("Unflattening at maturity {0} pass {1}: {2} changes"
-                           .format(self.cur_maturity, self.cur_maturity_pass, self.last_pass_nb_patch_done))
-        nb_clean = mba_deep_cleaning(self.mba, False)
-        if self.last_pass_nb_patch_done + nb_clean + self.non_significant_changes > 0:
-            self.mba.mark_chains_dirty()
-            self.mba.optimize_local(0)
-        self.mba.verify(True)
-        return self.last_pass_nb_patch_done
+        print("dispatcher_list = ",len(self.dispatcher_list))
+        self.last_pass_nb_patch_done = self.remove_flattening()
+
+        # if not self.check_if_rule_should_be_used(blk):
+        #     return 0
+        # self.last_pass_nb_patch_done = 0
+        # logging.info("Unflattening at maturity {0} pass {1}".format(self.cur_maturity, self.cur_maturity_pass))
+        # self.retrieve_all_dispatchers()
+        # if len(self.dispatcher_list) == 0:
+        #     logging.info("No dispatcher found at maturity {0}".format(self.mba.maturity))
+        #     return 0
+        # else:
+        #     logging.info("Unflattening: {0} dispatcher(s) found".format(len(self.dispatcher_list)))
+        #     for dispatcher_info in self.dispatcher_list:
+        #         dispatcher_info.print_info()
+        #     self.last_pass_nb_patch_done = self.remove_flattening()
+        # logging.info("Unflattening at maturity {0} pass {1}: {2} changes"
+        #                    .format(self.cur_maturity, self.cur_maturity_pass, self.last_pass_nb_patch_done))
+        # nb_clean = mba_deep_cleaning(self.mba, False)
+        # if self.last_pass_nb_patch_done + nb_clean + self.non_significant_changes > 0:
+        #     self.mba.mark_chains_dirty()
+        #     self.mba.optimize_local(0)
+        # self.mba.verify(True)
+        # return self.last_pass_nb_patch_done
 
 
     def start(self):
@@ -265,7 +275,7 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
                                                    .format(dispatcher_info.entry_block.serial, dispatcher_father.serial,
                                                            mop_searched_values_list))
 
-            print("cv:",hex(tmp_mop_searched_values[0]))
+            # print("cv:",hex(tmp_mop_searched_values[0]))
         target_blk, disp_ins = dispatcher_info.emulate_dispatcher_with_father_history(dispatcher_father_histories[0])
         if target_blk is not None:
             print("Unflattening graph: Making {0} goto {1}"
@@ -284,24 +294,21 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
 
 
 
-
 class blkOPt(hr.optblock_t):
 
     def func(self, blk):
         if blk.head is None:
-            print("blk head is None",blk.serial)
-
             return 0
-        print(blk.mba.maturity, hex(blk.head.ea),blk.serial)
+        print(blk.mba.maturity, hex(blk.head.ea))
         if blk.mba.maturity != hr.MMAT_GLBOPT2:
             return 0
         if blk.serial != 8:
             return 0
         print("UnflattenerFakeJump ")
 
-        # optimizer = UnflattenerFakeJump()
-        # optimizer.func(blk)
-        return 0
+        optimizer = UnflattenerFakeJump()
+        optimizer.func(blk)
+        return 1
 
 
 
@@ -309,15 +316,15 @@ class blkOPt(hr.optblock_t):
 if __name__ == '__main__':      #也可以直接在脚本里执行
     hr.clear_cached_cfuncs()
 
-    try:
-        optimizer = UnflattenerFakeJump()
-        optimizer.start()
-    except Exception as e:
-        logging.exception(e)
-
     # try:
-    #     optimizer = blkOPt()
-    #     optimizer.install()
+    #     optimizer = UnflattenerFakeJump()
+    #     # optimizer.install()
+    #     optimizer.start()
     # except Exception as e:
     #     logging.exception(e)
 
+    try:
+        optimizer = blkOPt()
+        optimizer.install()
+    except Exception as e:
+        logging.exception(e)

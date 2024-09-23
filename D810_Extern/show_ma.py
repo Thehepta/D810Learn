@@ -169,8 +169,8 @@ class microcode_viewer_t(kw.simplecustviewer_t):
             print("Failed to display the graph")
 
     def dominanceFlow(self):
-        import pydevd_pycharm
-        pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
+        # import pydevd_pycharm
+        # pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
         pre_black = None
         pre_num = -1
         for blk_idx in range(self._mba.qty):

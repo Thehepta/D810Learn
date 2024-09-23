@@ -1,6 +1,8 @@
 import ida_hexrays
 
 # 这个指令优化是作用域microcode层面的，也会多次调用，每个块都会调用
+# func 函数不会调用一次，会调用很多次，每一个块都会调用一次
+# ida 我们使用f5进行反编译的时候，成熟的一般在只能拦截到6左右
 class UnflattenerOpt(ida_hexrays.optblock_t):
 
     def func(self, blk):

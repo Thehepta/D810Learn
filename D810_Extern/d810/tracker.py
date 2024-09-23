@@ -360,8 +360,7 @@ class MopTracker(object):
         return None
 
 
-def get_block_with_multiple_predecessors(var_histories: List[MopHistory]) -> Tuple[Union[None, mblock_t],
-                                                                                   Union[None, Dict[int, List[MopHistory]]]]:
+def get_block_with_multiple_predecessors(var_histories: List[MopHistory]) -> Tuple[Union[None, mblock_t],Union[None, Dict[int, List[MopHistory]]]]:
     for i, var_history in enumerate(var_histories):
         pred_blk = var_history.block_path[0]
         for block in var_history.block_path[1:]:
