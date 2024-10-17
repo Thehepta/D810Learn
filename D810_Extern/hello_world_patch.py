@@ -91,11 +91,11 @@ class blkOPt(hr.optblock_t):
         if blk.mba.maturity != hr.MMAT_GLBOPT2:
             return 0
         # import pydevd_pycharm
-        # pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
+        # pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, s tderrToServer=True)
 
 
-        if blk.serial == 1:
-            if blk.succset[0] == 6:
+        if blk.serial == 8:
+            if blk.succset[0] == 5:
                 return 0
             print("First only ->>>>>>>>>>>>>>>>>>>>>>")
             blk_8 = None
@@ -105,7 +105,7 @@ class blkOPt(hr.optblock_t):
                 if blk_mtp.serial == 1:
                     blk_1 = blk_mtp
 
-                if blk_mtp.serial == 9:
+                if blk_mtp.serial == 8:
                     blk_8 = blk_mtp
 
             change_1way_block_successor(blk_1, 6)

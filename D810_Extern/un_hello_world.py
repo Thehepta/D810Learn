@@ -4,15 +4,15 @@ import ida_bytes
 import ida_funcs
 import ida_ida
 import ida_range
-from d810.hexrays_formatters import format_mop_list
-from d810.cfg_utils import mba_deep_cleaning
-from d810.hexrays_helpers import append_mop_if_not_in_list, extract_num_mop
+from d810.hexrays_formatters import format_minsn_t
+from d810.cfg_utils import mba_deep_cleaning,change_1way_block_successor
+from d810.hexrays_helpers import append_mop_if_not_in_list, extract_num_mop,CONTROL_FLOW_OPCODES
 from d810.optimizers.flow.flattening.generic import GenericDispatcherBlockInfo, GenericDispatcherUnflatteningRule
 from d810.optimizers.flow.flattening.generic import GenericDispatcherInfo
 from d810.optimizers.flow.flattening.unflattener import OllvmDispatcherCollector
 from d810.optimizers.flow.flattening.utils import NotResolvableFatherException, get_all_possibles_values, \
     NotDuplicableFatherException
-from d810.tracker import MopHistory, MopTracker
+from d810.tracker import MopHistory, MopTracker,duplicate_histories
 from ida_hexrays import mblock_t, mop_t, optblock_t, minsn_visitor_t, mbl_array_t
 import ida_hexrays as hr
 import ida_kernwin as kw
@@ -109,7 +109,7 @@ class adjustOllvmDispatcherInfo(GenericDispatcherInfo):
 
 
 
-
+## 收集 分发块信息，这个目前是写死的，后续可以通过主宰算法处理他
 class adjustOllvmDispatcherCollector():
     DISPATCHER_CLASS = adjustOllvmDispatcherInfo
     DEFAULT_DISPATCHER_MIN_INTERNAL_BLOCK = 2
@@ -169,7 +169,7 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
             self.last_pass_nb_patch_done = self.remove_flattening()
         logging.info("Unflattening at maturity {0} pass {1}: {2} changes"
                            .format(self.cur_maturity, self.cur_maturity_pass, self.last_pass_nb_patch_done))
-        nb_clean = mba_deep_cleaning(self.mba, False)
+        nb_clean = mba_deep_cleaning(self.mba, False)    #下面这几行可以删除，在这个项目好像没什么影响
         if self.last_pass_nb_patch_done + nb_clean + self.non_significant_changes > 0:
             self.mba.mark_chains_dirty()
             self.mba.optimize_local(0)
@@ -238,14 +238,41 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
                     print(e)
                     pass
 
-
+            dispatcher_father_list = [self.mba.get_mblock(x) for x in dispatcher_info.entry_block.blk.predset]
+            nb_flattened_branches = 0
             for dispatcher_father in dispatcher_father_list:
                 try:
-                    self.resolve_dispatcher_father(dispatcher_father, dispatcher_info)
+                    nb_flattened_branches += self.resolve_dispatcher_father(dispatcher_father, dispatcher_info)
                 except NotResolvableFatherException as e:
                     print("NotResolvableFatherException")
+        return 0
 
-    def resolve_dispatcher_father(self, dispatcher_father: mblock_t, dispatcher_info):
+    def ensure_dispatcher_father_is_resolvable(self, dispatcher_father: mblock_t,
+                                               dispatcher_entry_block: GenericDispatcherBlockInfo) -> int:
+        father_histories = self.get_dispatcher_father_histories(dispatcher_father, dispatcher_entry_block)
+        father_histories_cst = get_all_possibles_values(father_histories, dispatcher_entry_block.use_before_def_list,
+                                                        verbose=False)
+        father_is_resolvable = self.check_if_histories_are_resolved(father_histories)
+        if not father_is_resolvable:
+            raise NotDuplicableFatherException("Dispatcher {0} predecessor {1} is not duplicable: {2}"
+                                               .format(dispatcher_entry_block.serial, dispatcher_father.serial,
+                                                       father_histories_cst))
+        for father_history_cst in father_histories_cst:
+            if None in father_history_cst:
+                raise NotDuplicableFatherException("Dispatcher {0} predecessor {1} has None value: {2}"
+                                                   .format(dispatcher_entry_block.serial, dispatcher_father.serial,
+                                                           father_histories_cst))
+
+        print("Dispatcher {0} predecessor {1} is resolvable: {2}"
+                           .format(dispatcher_entry_block.serial, dispatcher_father.serial, father_histories_cst))
+        nb_duplication, nb_change = duplicate_histories(father_histories, max_nb_pass=self.max_duplication_passes)
+        print("Dispatcher {0} predecessor {1} duplication: {2} blocks created, {3} changes made"
+                           .format(dispatcher_entry_block.serial, dispatcher_father.serial, nb_duplication, nb_change))
+        return nb_duplication + nb_change
+
+
+
+    def resolve_dispatcher_father(self, dispatcher_father: mblock_t, dispatcher_info) -> int:
         dispatcher_father_histories = self.get_dispatcher_father_histories(dispatcher_father,
                                                                            dispatcher_info.entry_block)
         # father_is_resolvable = self.check_if_histories_are_resolved(dispatcher_father_histories)
@@ -255,10 +282,10 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
                                                             dispatcher_info.entry_block.use_before_def_list,
                                                             verbose=False)
 
+
         ref_mop_searched_values = mop_searched_values_list[0]
         print("entry_block:", dispatcher_father.serial)
         print("cvlist:", len(mop_searched_values_list))
-
         for tmp_mop_searched_values in mop_searched_values_list:
             if tmp_mop_searched_values != ref_mop_searched_values:
                 raise NotResolvableFatherException("Dispatcher {0} predecessor {1} is not resolvable: {2}"
@@ -270,6 +297,17 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
         if target_blk is not None:
             print("Unflattening graph: Making {0} goto {1}"
                                 .format(dispatcher_father.serial, target_blk.serial))
+            ins_to_copy = [ins for ins in disp_ins if ((ins is not None) and (ins.opcode not in CONTROL_FLOW_OPCODES))]
+
+            if len(ins_to_copy) > 0:
+                print("Instruction copied: {0}: {1}"
+                                   .format(len(ins_to_copy),
+                                           ", ".join([format_minsn_t(ins_copied) for ins_copied in ins_to_copy])))
+            else:
+
+                print("else")
+                change_1way_block_successor(dispatcher_father, target_blk.serial)
+            return 2
 
     def get_dispatcher_father_histories(self, dispatcher_father: mblock_t,
                                         dispatcher_entry_block: GenericDispatcherBlockInfo) -> List[MopHistory]:
@@ -284,24 +322,18 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
 
 
 
-
 class blkOPt(hr.optblock_t):
 
     def func(self, blk):
         if blk.head is None:
             print("blk head is None",blk.serial)
-
             return 0
         print(blk.mba.maturity, hex(blk.head.ea),blk.serial)
         if blk.mba.maturity != hr.MMAT_GLBOPT2:
             return 0
-        if blk.serial != 8:
-            return 0
-        print("UnflattenerFakeJump ")
 
-        # optimizer = UnflattenerFakeJump()
-        # optimizer.func(blk)
-        return 0
+        optimizer = UnflattenerFakeJump()
+        return optimizer.func(blk)
 
 
 
@@ -309,15 +341,15 @@ class blkOPt(hr.optblock_t):
 if __name__ == '__main__':      #也可以直接在脚本里执行
     hr.clear_cached_cfuncs()
 
-    try:
-        optimizer = UnflattenerFakeJump()
-        optimizer.start()
-    except Exception as e:
-        logging.exception(e)
-
     # try:
-    #     optimizer = blkOPt()
-    #     optimizer.install()
+    #     optimizer = UnflattenerFakeJump()
+    #     optimizer.start()
     # except Exception as e:
     #     logging.exception(e)
+
+    try:
+        optimizer = blkOPt()
+        optimizer.install()
+    except Exception as e:
+        logging.exception(e)
 
