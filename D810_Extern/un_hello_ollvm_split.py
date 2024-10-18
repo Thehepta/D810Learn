@@ -39,6 +39,7 @@ class adjustOllvmDispatcherInfo(GenericDispatcherInfo):
         dispatcher_blk_with_external_father = self._get_dispatcher_blocks_with_external_father()
         # TODO: I think this can be wrong because we are too permissive in detection of dispatcher blocks
         if len(dispatcher_blk_with_external_father) != 0:
+            print("GenericDispatcherInfo can't blk_serial:",blk.serial)
             return False
         return True
 
@@ -124,17 +125,15 @@ class adjustOllvmDispatcherCollector():
         self.dispatcher_min_exit_block = self.DEFAULT_DISPATCHER_MIN_EXIT_BLOCK
         self.dispatcher_min_comparison_value = self.DEFAULT_DISPATCHER_MIN_COMPARISON_VALUE
 
-    def get_dispatcher_list(self) -> List[GenericDispatcherInfo]:
-        # self.remove_sub_dispatchers()
+    def get_dispatcher_list(self,cur_blk) -> List[GenericDispatcherInfo]:
+        self.collector(cur_blk)
         return self.dispatcher_list
 
-    def collector(self, mba):
-        for blk_idx in range(mba.qty):
-            blk = mba.get_mblock(blk_idx)
-            if blk.serial == 2:
-                disp_info = self.DISPATCHER_CLASS(blk.mba)
-                if True == disp_info.explore(blk):
-                    self.dispatcher_list.append(disp_info)
+    def collector(self, cur_blk):
+        if cur_blk.serial == 2:
+            disp_info = self.DISPATCHER_CLASS(cur_blk.mba)
+            if disp_info.explore(cur_blk):
+                self.dispatcher_list.append(disp_info)
 
 
 class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
@@ -144,6 +143,7 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
 
     def __init__(self):
         super().__init__()
+        self.cur_blk = None
         self.dispatcher_collector = self.DISPATCHER_COLLECTOR_CLASS()
         self.dispatcher_list = []
         self.max_duplication_passes = self.DEFAULT_MAX_DUPLICATION_PASSES
@@ -154,16 +154,14 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
 
     def func(self, blk: mblock_t):
         self.mba = blk.mba
-        if not self.check_if_rule_should_be_used(blk):
-            return 0
+        self.cur_blk = blk
         self.last_pass_nb_patch_done = 0
-        logging.info("Unflattening at maturity {0} pass {1}".format(self.cur_maturity, self.cur_maturity_pass))
         self.retrieve_all_dispatchers()
         if len(self.dispatcher_list) == 0:
             logging.info("No dispatcher found at maturity {0}".format(self.mba.maturity))
             return 0
         else:
-            logging.info("Unflattening: {0} dispatcher(s) found".format(len(self.dispatcher_list)))
+            print("Unflattening: {0} dispatcher(s) found".format(len(self.dispatcher_list)))
             for dispatcher_info in self.dispatcher_list:
                 dispatcher_info.print_info()
             self.last_pass_nb_patch_done = self.remove_flattening()
@@ -217,8 +215,7 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
 
     def retrieve_all_dispatchers(self):
         self.dispatcher_list = []
-        self.dispatcher_collector.collector(self.mba)
-        self.dispatcher_list = [x for x in self.dispatcher_collector.get_dispatcher_list()]
+        self.dispatcher_list = [x for x in self.dispatcher_collector.get_dispatcher_list(self.cur_blk)]
 
     def remove_flattening(self) -> int:
         # import pydevd_pycharm
@@ -226,6 +223,7 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
         total_nb_change = 0
         for dispatcher_info in self.dispatcher_list:
             print("dispatcher_info:", hex(dispatcher_info.entry_block.blk.start))
+            print("dispatcher_info predset len:", len(dispatcher_info.entry_block.blk.predset))
             dispatcher_father_list = [self.mba.get_mblock(x) for x in dispatcher_info.entry_block.blk.predset]
             for dispatcher_father in dispatcher_father_list:
                 try:
@@ -234,7 +232,7 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
                 except NotDuplicableFatherException as e:
                     print(e)
                     pass
-
+            print("start patch")
             dispatcher_father_list = [self.mba.get_mblock(x) for x in dispatcher_info.entry_block.blk.predset]
             nb_flattened_branches = 0
             for dispatcher_father in dispatcher_father_list:
@@ -261,8 +259,7 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
                                                    .format(dispatcher_entry_block.serial, dispatcher_father.serial,
                                                            father_histories_cst))
 
-        print("Dispatcher {0} predecessor {1} is resolvable: {2}"
-              .format(dispatcher_entry_block.serial, dispatcher_father.serial, father_histories_cst))
+        print("Dispatcher {0} predecessor {1} is resolvable: {2}".format(dispatcher_entry_block.serial, dispatcher_father.serial, father_histories_cst))
         nb_duplication, nb_change = duplicate_histories(father_histories, max_nb_pass=self.max_duplication_passes)
         print("Dispatcher {0} predecessor {1} duplication: {2} blocks created, {3} changes made"
               .format(dispatcher_entry_block.serial, dispatcher_father.serial, nb_duplication, nb_change))
@@ -344,5 +341,6 @@ if __name__ == '__main__':  # 也可以直接在脚本里执行
     try:
         optimizer = blkOPt()
         optimizer.install()
+        # optimizer.uninstall()
     except Exception as e:
         logging.exception(e)

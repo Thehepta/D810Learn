@@ -104,6 +104,7 @@ class microcode_viewer_t(kw.simplecustviewer_t):
                 line_no += 1
                 if insn == blk.tail:
                     break
+
                 insn = insn.next
 
         return True
@@ -269,9 +270,6 @@ def show_xrefs(mba,instr,mop):
             if insn == blk.tail:
                 break
             insn = insn.next
-
-
-
 
     ctx = hr.op_parent_info_t()
     # start = ctx.topins.next
