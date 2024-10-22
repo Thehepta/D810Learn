@@ -158,7 +158,7 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
         self.last_pass_nb_patch_done = 0
         self.retrieve_all_dispatchers()
         if len(self.dispatcher_list) == 0:
-            logging.info("No dispatcher found at maturity {0}".format(self.mba.maturity))
+            print("No dispatcher found at maturity {0}".format(self.mba.maturity))
             return 0
         else:
             print("Unflattening: {0} dispatcher(s) found".format(len(self.dispatcher_list)))
@@ -232,8 +232,8 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
                 except NotDuplicableFatherException as e:
                     print(e)
                     pass
-            print("start patch")
             dispatcher_father_list = [self.mba.get_mblock(x) for x in dispatcher_info.entry_block.blk.predset]
+            print("start patch is len:",len(dispatcher_father_list))
             nb_flattened_branches = 0
             for dispatcher_father in dispatcher_father_list:
                 try:
@@ -268,9 +268,9 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
     def resolve_dispatcher_father(self, dispatcher_father: mblock_t, dispatcher_info) -> int:
         dispatcher_father_histories = self.get_dispatcher_father_histories(dispatcher_father,
                                                                            dispatcher_info.entry_block)
-        father_is_resolvable = self.check_if_histories_are_resolved(dispatcher_father_histories)
-        if not father_is_resolvable:
-            raise NotResolvableFatherException("Can't fix block {0}".format(dispatcher_father.serial))
+        # father_is_resolvable = self.check_if_histories_are_resolved(dispatcher_father_histories)
+        # if not father_is_resolvable:
+        #     raise NotResolvableFatherException("Can't fix block {0}".format(dispatcher_father.serial))
         mop_searched_values_list = get_all_possibles_values(dispatcher_father_histories,
                                                             dispatcher_info.entry_block.use_before_def_list,
                                                             verbose=False)
