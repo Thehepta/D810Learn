@@ -17,9 +17,33 @@ from ida_hexrays import mblock_t, mop_t, optblock_t, minsn_visitor_t, mbl_array_
 import ida_hexrays as hr
 import ida_kernwin as kw
 import logging
+from graphviz import Digraph
+import os
 
 FLATTENING_JUMP_OPCODES = [hr.m_jnz, hr.m_jz, hr.m_jae, hr.m_jb, hr.m_ja, hr.m_jbe, hr.m_jg, hr.m_jge, hr.m_jl,
                            hr.m_jle]
+
+opt_count = 0
+
+
+os.environ['PATH'] = os.pathsep + r'C:\Program Files\Graphviz\bin'
+
+
+def  showMicrocodeGraph(mba:mblock_t):
+    for blk_idx in range(mba.qty):
+        blk = mba.get_mblock(blk_idx)
+        insn = blk.head
+        index = 0
+        # while insn:
+        #     line = "{0}.{1}\t{2}    {3}".format(blk_idx, index, hex(insn.ea), insn.dstr())
+        #     self.AddLine(line)
+        #     self.insn_map[line_no] = insn
+        #     index = index + 1
+        #     line_no += 1
+        #     if insn == blk.tail:
+        #         break
+        #
+        #     insn = insn.next
 
 
 class adjustOllvmDispatcherInfo(GenericDispatcherInfo):
@@ -131,6 +155,9 @@ class adjustOllvmDispatcherCollector():
 
     def collector(self, cur_blk):
         if cur_blk.serial == 2:
+            global opt_count
+            print("opt_count = ",opt_count)
+            opt_count = opt_count + 1
             disp_info = self.DISPATCHER_CLASS(cur_blk.mba)
             if disp_info.explore(cur_blk):
                 self.dispatcher_list.append(disp_info)
@@ -153,6 +180,8 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
         self.MOP_TRACKER_MAX_NB_PATH = 100
 
     def func(self, blk: mblock_t):
+        # import pydevd_pycharm
+        # pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
         self.mba = blk.mba
         self.cur_blk = blk
         self.last_pass_nb_patch_done = 0
@@ -165,7 +194,7 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
             for dispatcher_info in self.dispatcher_list:
                 dispatcher_info.print_info()
             self.last_pass_nb_patch_done = self.remove_flattening()
-        logging.info("Unflattening at maturity {0} pass {1}: {2} changes"
+        print("Unflattening at maturity {0} pass {1}: {2} changes"
                      .format(self.cur_maturity, self.cur_maturity_pass, self.last_pass_nb_patch_done))
         nb_clean = mba_deep_cleaning(self.mba, False)  # 下面这几行可以删除，在这个项目好像没什么影响
         if self.last_pass_nb_patch_done + nb_clean + self.non_significant_changes > 0:
@@ -175,8 +204,8 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
         return self.last_pass_nb_patch_done
 
     def start(self):
-        # import pydevd_pycharm
-        # pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
+        import pydevd_pycharm
+        pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
         sel, sea, eea = kw.read_range_selection(None)
         pfn = ida_funcs.get_func(kw.get_screen_ea())
         if not sel and not pfn:
@@ -218,8 +247,7 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
         self.dispatcher_list = [x for x in self.dispatcher_collector.get_dispatcher_list(self.cur_blk)]
 
     def remove_flattening(self) -> int:
-        # import pydevd_pycharm
-        # pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
+
         total_nb_change = 0
         for dispatcher_info in self.dispatcher_list:
             print("dispatcher_info:", hex(dispatcher_info.entry_block.blk.start))
@@ -227,11 +255,12 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
             dispatcher_father_list = [self.mba.get_mblock(x) for x in dispatcher_info.entry_block.blk.predset]
             for dispatcher_father in dispatcher_father_list:
                 try:
-                    total_nb_change += self.ensure_dispatcher_father_is_resolvable(dispatcher_father,
-                                                                                   dispatcher_info.entry_block)
+                    total_nb_change += self.ensure_dispatcher_father_is_resolvable(dispatcher_father,dispatcher_info.entry_block)
                 except NotDuplicableFatherException as e:
                     print(e)
                     pass
+            if total_nb_change != 0:
+                return total_nb_change
             dispatcher_father_list = [self.mba.get_mblock(x) for x in dispatcher_info.entry_block.blk.predset]
             print("start patch is len:",len(dispatcher_father_list))
             nb_flattened_branches = 0
@@ -241,10 +270,13 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
                 except NotResolvableFatherException as e:
                     print("NotResolvableFatherException")
                     print(e)
-        return 0
+        return total_nb_change
 
     def ensure_dispatcher_father_is_resolvable(self, dispatcher_father: mblock_t,
                                                dispatcher_entry_block: GenericDispatcherBlockInfo) -> int:
+        if dispatcher_father.serial == 19:
+            print("entry block 19")
+            showMicrocodeGraph(self.mba)
         father_histories = self.get_dispatcher_father_histories(dispatcher_father, dispatcher_entry_block)
         father_histories_cst = get_all_possibles_values(father_histories, dispatcher_entry_block.use_before_def_list,
                                                         verbose=False)
@@ -268,9 +300,9 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
     def resolve_dispatcher_father(self, dispatcher_father: mblock_t, dispatcher_info) -> int:
         dispatcher_father_histories = self.get_dispatcher_father_histories(dispatcher_father,
                                                                            dispatcher_info.entry_block)
-        # father_is_resolvable = self.check_if_histories_are_resolved(dispatcher_father_histories)
-        # if not father_is_resolvable:
-        #     raise NotResolvableFatherException("Can't fix block {0}".format(dispatcher_father.serial))
+        father_is_resolvable = self.check_if_histories_are_resolved(dispatcher_father_histories)
+        if not father_is_resolvable:
+            raise NotResolvableFatherException("Can't fix block {0}".format(dispatcher_father.serial))
         mop_searched_values_list = get_all_possibles_values(dispatcher_father_histories,
                                                             dispatcher_info.entry_block.use_before_def_list,
                                                             verbose=False)
