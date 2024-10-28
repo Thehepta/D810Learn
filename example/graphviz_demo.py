@@ -2,7 +2,7 @@ from graphviz import Digraph
 import os
 
 
-os.environ['PATH'] = os.pathsep + r'C:\Program Files\Graphviz\bin'
+# os.environ['PATH'] = os.pathsep + r'C:\Program Files\Graphviz\bin'
 
 
 # 创建有向图
@@ -18,6 +18,11 @@ dot.edge("A", "B")
 dot.edge("B", "C")
 
 # 保存图像
-dot.render("graph_with_content", format="png")
+# dot.render("graph_with_content", format="png")
+
+# 输出dot文件
+output_path = "graph_with_content.dot"
+with open(output_path, "w") as f:
+    f.write(dot.source)
 
 print("图像已保存为 graph_with_content.png")

@@ -130,8 +130,12 @@ class microcode_viewer_t(kw.simplecustviewer_t):
                     continue
                 dot.edge(str(blk_idx), str(succ))
 
-        dot.render("/home/chic/graph_with_content", format="png")
-        print("图像已保存为 graph_with_content.png")
+        # dot.render("/home/chic/graph_with_contentgraph_with_content", format="png")
+        output_path = "/home/chic/graph_with_content.dot"
+        with open(output_path, "w") as f:
+            f.write(dot.source)
+        # dot.render("/home/chic/graph_with_content", format="png")
+        print("dot已保存为 graph_with_content.png")
 
     def codeFlow(self):
         class MyGraph(idaapi.GraphViewer):
