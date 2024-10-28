@@ -30,8 +30,12 @@ os.environ['PATH'] = os.pathsep + r'C:\Program Files\Graphviz\bin'
 
 
 def  showMicrocodeGraph(mba:mblock_t):
+    dot = Digraph()
+
     for blk_idx in range(mba.qty):
         blk = mba.get_mblock(blk_idx)
+        dot.node(str(blk_idx),)
+
         insn = blk.head
         index = 0
         # while insn:

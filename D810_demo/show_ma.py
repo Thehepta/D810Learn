@@ -8,6 +8,7 @@ import ida_hexrays as hr
 import ida_range
 import ida_pro
 import idaapi
+from graphviz import Digraph
 
 # -----------------------------------------------------------------------------
 
@@ -97,6 +98,40 @@ class microcode_viewer_t(kw.simplecustviewer_t):
             self.dominanceFlow()
         if vkey == ord("F"):
             self.codeFlow()
+        if vkey == ord("G"):
+            self.graphviz()
+
+    def graphviz(self):
+        dot = Digraph()
+        for blk_idx in range(self._mba.qty):
+            blk = self._mba.get_mblock(blk_idx)
+            if blk.head == None:
+                continue
+            lines = []
+
+            lines.append("{0}:{1}".format(blk_idx, hex(blk.head.ea)))
+            insn = blk.head
+            while insn:
+                lines.append(insn.dstr())
+                if insn == blk.tail:
+                    break
+                insn = insn.next
+            label = "\n".join(lines)
+            dot.node(str(blk_idx), label=label, shape="rect", style="filled", fillcolor="lightblue")
+
+        for blk_idx in range(self._mba.qty):
+            blk = self._mba.get_mblock(blk_idx)
+            succset = [x for x in blk.succset]
+            for succ in succset:
+                blk_succ = self._mba.get_mblock(succ)
+                if blk_succ.head is None:
+                    continue
+                if blk.head is None:
+                    continue
+                dot.edge(str(blk_idx), str(succ))
+
+        dot.render("/home/chic/graph_with_content", format="png")
+        print("图像已保存为 graph_with_content.png")
 
     def codeFlow(self):
         class MyGraph(idaapi.GraphViewer):
