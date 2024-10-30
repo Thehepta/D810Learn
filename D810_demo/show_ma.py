@@ -69,7 +69,7 @@ class microcode_viewer_t(kw.simplecustviewer_t):
 
     def Create(self, mba, title, mmat_name, fn_name):
         self.title = "Microcode: %s" % title
-        self._mba = mba
+        self.mba = mba
         self.mmat_name = mmat_name
         self.fn_name = fn_name
         if not kw.simplecustviewer_t.Create(self, self.title):
@@ -101,10 +101,11 @@ class microcode_viewer_t(kw.simplecustviewer_t):
         if vkey == ord("G"):
             self.graphviz()
 
-    def graphviz(self):
+    def graphviz(self ):
         dot = Digraph()
-        for blk_idx in range(self._mba.qty):
-            blk = self._mba.get_mblock(blk_idx)
+        dot.attr(splines='ortho')
+        for blk_idx in range(self.mba.qty):
+            blk = self.mba.get_mblock(blk_idx)
             if blk.head == None:
                 continue
             lines = []
@@ -119,11 +120,11 @@ class microcode_viewer_t(kw.simplecustviewer_t):
             label = "\n".join(lines)
             dot.node(str(blk_idx), label=label, shape="rect", style="filled", fillcolor="lightblue")
 
-        for blk_idx in range(self._mba.qty):
-            blk = self._mba.get_mblock(blk_idx)
+        for blk_idx in range(self.mba.qty):
+            blk = self.mba.get_mblock(blk_idx)
             succset = [x for x in blk.succset]
             for succ in succset:
-                blk_succ = self._mba.get_mblock(succ)
+                blk_succ = self.mba.get_mblock(succ)
                 if blk_succ.head is None:
                     continue
                 if blk.head is None:
@@ -161,7 +162,7 @@ class microcode_viewer_t(kw.simplecustviewer_t):
                         insn = insn.next
                     label = "\n".join(lines)
                     node_id = self.AddNode(label)
-                    nodes[blk.head.ea] = node_id
+                    nodes[blk_idx] = node_id
 
                 for blk_idx in range(self._mba.qty):
                     blk = self._mba.get_mblock(blk_idx)
@@ -172,8 +173,7 @@ class microcode_viewer_t(kw.simplecustviewer_t):
                             continue
                         if blk.head == None:
                             continue
-                        if blk_succ.head.ea in nodes:
-                            self.AddEdge(nodes[blk.head.ea], nodes[blk_succ.head.ea])
+                        self.AddEdge(nodes[blk_idx], nodes[blk_succ.serial])
                 return True
 
             def OnGetText(self, node_id):
@@ -182,7 +182,7 @@ class microcode_viewer_t(kw.simplecustviewer_t):
 
 
         title = "Fun microcode FlowChart"
-        graph = MyGraph(title, self._mba)
+        graph = MyGraph(title, self.mba)
         if not graph.Show():
             print("Failed to display the graph")
 
@@ -191,8 +191,8 @@ class microcode_viewer_t(kw.simplecustviewer_t):
         # pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
         pre_black = None
         pre_num = -1
-        for blk_idx in range(self._mba.qty):
-            blk = self._mba.get_mblock(blk_idx)
+        for blk_idx in range(self.mba.qty):
+            blk = self.mba.get_mblock(blk_idx)
             # print(pre_num,len(blk.predset))
             if(pre_num < len(blk.predset)):
                 pre_black = blk
@@ -267,13 +267,13 @@ class microcode_viewer_t(kw.simplecustviewer_t):
 
         if selectCurrentWord.find(mop_l_str) != -1:
             print(mop_l_str)
-            show_xrefs(self._mba,ins_token,ins_token.l)
+            show_xrefs(self.mba, ins_token, ins_token.l)
         if selectCurrentWord.find(mop_d_str) != -1:
             print(mop_d_str)
-            show_xrefs(self._mba,ins_token,ins_token.d)
+            show_xrefs(self.mba, ins_token, ins_token.d)
         if selectCurrentWord.find(mop_r_str) != -1:
             print(mop_r_str)
-            show_xrefs(self._mba,ins_token,ins_token.r)
+            show_xrefs(self.mba, ins_token, ins_token.r)
 
         # print(mop_l_str,mop_r_str,mop_d_str)
         # print(selectCurrentWord)

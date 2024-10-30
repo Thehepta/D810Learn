@@ -1,28 +1,25 @@
 from graphviz import Digraph
-import os
 
+dot = Digraph(comment='Flowchart with Curved Edges')
 
-# os.environ['PATH'] = os.pathsep + r'C:\Program Files\Graphviz\bin'
+# 设置图的属性
+dot.attr(rankdir='LR', splines='true')  # 允许弯曲
 
-
-# 创建有向图
-dot = Digraph()
-
-# 添加节点并设置标签内容
-dot.node("A", label="Node A\nContent: Start", shape="rect", style="filled", fillcolor="lightblue")
-dot.node("B", label="Node B\nContent: Middle", shape="rect", style="filled", fillcolor="lightblue")
-dot.node("C", label="Node C\nContent: End", shape="rect", style="filled", fillcolor="lightblue")
+# 添加节点
+dot.node('A', 'Start', shape='ellipse', style='filled', fillcolor='lightblue')
+dot.node('B', 'Process 1', shape='box', style='filled', fillcolor='lightgreen')
+dot.node('C', 'Decision', shape='diamond', style='filled', fillcolor='lightcoral')
+dot.node('D', 'Process 2', shape='box', style='filled', fillcolor='lightgreen')
+dot.node('E', 'End', shape='ellipse', style='filled', fillcolor='lightblue')
 
 # 添加边
-dot.edge("A", "B")
-dot.edge("B", "C")
+dot.edge('A', 'B', label='Step 1')
+dot.edge('B', 'C', label='Step 2')
+dot.edge('C', 'D', label='Yes', color='green')
+dot.edge('C', 'E', label='No', color='red')
+dot.edge('D', 'E', label='Step 3')
 
 # 保存图像
-# dot.render("graph_with_content", format="png")
+dot.render('/home/chic/curved_flowchart')
 
-# 输出dot文件
-output_path = "graph_with_content.dot"
-with open(output_path, "w") as f:
-    f.write(dot.source)
-
-print("图像已保存为 graph_with_content.png")
+print("曲线流程图已生成并保存")
