@@ -34,24 +34,26 @@ def get_blk_index(block: mblock_t, block_path: List[mblock_t]) -> int:
 def get_block_with_multiple_predecessors(var_histories: List[MopHistory]) -> Tuple[Union[None, mblock_t],Union[None, Dict[int, List[MopHistory]]]]:
     # 第一个循环是进行MopHistory 循环，每个MopHistory 是一个分支
     for i, var_history in enumerate(var_histories):
-        # 循环MopHistory其中某个的 第一个 块开始作为前驱 ，后面会不断更新
+        # 首先是循环所有分支，var_history.block_path[0] 是某个循环分支中的第一个块。从第一个块开始进入下层循环循环，下层循环会遍历当前分支的所有块
         pred_blk = var_history.block_path[0]
-        # 循环MopHistory其中某个的 第2块开始循环到最后一个
+        # 从当前分支的第二个块开始循环，到最后，同时不断更新pred_blk，他永远是block的前一个块。也就是说这个横向双块循环
         for block in var_history.block_path[1:]:
-            #前驱作为下标后面进行存在判断
+            #前驱的serial作为下标后面进行存在判断
             tmp_dict = {pred_blk.serial: [var_history]}  # 在这里加入遍历
             # 循环上面MopHistory 的后一个
+            # 进入下一层循环，这个循环是分支循环，i+1 表明，从最上面开始循环分支的下一个分支开始进行这个分支循环，也就是说，这里是纵向双分支循环
             for j in range(i + 1, len(var_histories)):
-                #找到前面的MopHistory 循环的块，是否在路径中
+                #var_histories[j].block_path 就是当前分支所有的块的列表，找一下这个块是否在这个列表
                 blk_index = get_blk_index(block, var_histories[j].block_path)    #寻找 block 在  var_histories[j].block_path 中是否存在，如果存在返回下标
 
-                if (blk_index - 1) >= 0:                                          # 如果存在
+                if (blk_index - 1) >= 0:                                          # 如果存在，也就是这个上层分支的块在当前分支中找到了
                     other_pred = var_histories[j].block_path[blk_index - 1]       # 找到他的这个块的前驱
                     if other_pred.serial not in tmp_dict.keys():                  # 判断是否已经加入到列表中
-                        tmp_dict[other_pred.serial] = []                          # 没有就创建，不存在加入到列表中
+                        tmp_dict[other_pred.serial] = []                          # 没有就创建，不存在加入到列表中，这个tmp_dict 存在列表，在上面创建的时候就会加入上层分支，这个块以及前驱到map里
                     tmp_dict[other_pred.serial].append(var_histories[j])
-            if len(tmp_dict) > 1:
-                return block, tmp_dict                                              #返回这个块
+            if len(tmp_dict) > 1:                                                 # 这个tmp_dict 对应具体分支，具体块的前驱和块，因为是具体分支，虽然单个块有前驱，但是在对应具体分支的时候,一个块只会有一个前驱
+                                                                                  # 所以如果出现两个，说明不同分支中同一个块有两个前驱，因为前驱是key,同一个前驱是不会有两个maps的
+                return block, tmp_dict                                            # 返回这个块
             pred_blk = block
     return None, None
 

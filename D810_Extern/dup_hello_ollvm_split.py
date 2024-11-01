@@ -13,8 +13,7 @@ from d810.optimizers.flow.flattening.unflattener import OllvmDispatcherCollector
 from d810.optimizers.flow.flattening.utils import NotResolvableFatherException, get_all_possibles_values, \
     NotDuplicableFatherException
 from d810.hexrays_helpers import equal_mops_ignore_size, get_mop_index, get_blk_index
-from d810.cfg_utils import change_1way_block_successor, change_2way_block_conditional_successor, duplicate_block
-
+from d810.cfg_utils import change_1way_block_successor, change_2way_block_conditional_successor
 from d810.tracker import MopHistory, MopTracker
 from ida_hexrays import mblock_t, mop_t, optblock_t, minsn_visitor_t, mbl_array_t
 import ida_hexrays as hr
@@ -234,8 +233,86 @@ class microcode_viewer_t(kw.simplecustviewer_t):
             print("Failed to display the graph")
 
 
+
+
+def insert_nop_blk(blk: mblock_t) -> mblock_t:
+    # 这个函数的作用是在传入的块后面在复制一个代码块，然后指令全部变为nop
+    # 另外需要修复一下控制流程，最后返回这个nop块
+    # 为什么需要修复，因为copy_block 会将代码块插入制定的位置,但是他的使用文档中说，他不会修复前驱和后继
+    mba = blk.mba
+    nop_block = mba.copy_block(blk, blk.serial + 1)
+    cur_ins = nop_block.head
+    while cur_ins is not None:
+        nop_block.make_nop(cur_ins)
+        cur_ins = cur_ins.next
+
+    nop_block.type = hr.BLT_1WAY
+
+    # We might have clone a block with multiple or no successor, thus we need to clean all
+    prev_successor_serials = [x for x in nop_block.succset]
+
+    # Bookkeeping
+    for prev_successor_serial in prev_successor_serials:
+        nop_block.succset._del(prev_successor_serial)
+        prev_succ = mba.get_mblock(prev_successor_serial)
+        prev_succ.predset._del(nop_block.serial)
+        if prev_succ.serial != mba.qty - 1:
+            prev_succ.mark_lists_dirty()
+
+    nop_block.succset.push_back(nop_block.serial + 1)
+    nop_block.mark_lists_dirty()
+
+    new_blk_successor = mba.get_mblock(nop_block.serial + 1)
+    new_blk_successor.predset.push_back(nop_block.serial)
+    if new_blk_successor.serial != mba.qty - 1:
+        new_blk_successor.mark_lists_dirty()
+
+    mba.mark_chains_dirty()
+    try:
+        mba.verify(True)
+        return nop_block
+    except RuntimeError as e:
+        print("Error in insert_nop_blk: {0}".format(e))
+        # print(nop_block, helper_logger.error)
+        raise e
+
+
+def duplicate_block(block_to_duplicate: mblock_t) -> Tuple[mblock_t, mblock_t]:
+    # 这个函数的主要作用就是，复制一个代码块，并且取保这个代码块的后续执行流程和原代码块一致
+    print("    start duplicate_block")
+    mba = block_to_duplicate.mba
+    duplicated_blk = mba.copy_block(block_to_duplicate, mba.qty - 1)
+    print("  Duplicated {0} -> {1}".format(block_to_duplicate.serial, duplicated_blk.serial))
+    duplicated_blk_default = None
+    if (block_to_duplicate.tail is not None) and hr.is_mcode_jcond(block_to_duplicate.tail.opcode):
+        # 双分支，条件跳转判断
+        # 这个代码的主要作用是让这个复制出来的，新插入的代码块的后续执行流程，跟被复制的代码块走一样的流程
+        # 但是复制代码块会导致代码位置发生偏移，原代码顺序执行的位置代码位置，在新的代码块中是无法执行到得。
+        # 所以先在制造一个代码块，就在上次复制代码块的后面，这样上次复制的代码块会顺序执行到第二次复制的位置。
+        # 将第二次制造的代码块全部变为nop,然后 change_1way_block_successor,这个代码块最后一条指令goto的被复制代码顺序执行的位置。
+
+        # block_to_duplicate.serial + 1 就是被复制的块的下一个块，双分支，这个块就是其中一个跳转的目标分支
+        block_to_duplicate_default_successor = mba.get_mblock(block_to_duplicate.serial + 1)
+        duplicated_blk_default = insert_nop_blk(duplicated_blk)
+        change_1way_block_successor(duplicated_blk_default, block_to_duplicate.serial + 1)
+        print("  {0} is conditional, so created a default child {1} for {2} which goto {3}"
+                            .format(block_to_duplicate.serial, duplicated_blk_default.serial, duplicated_blk.serial,
+                                    block_to_duplicate_default_successor.serial))
+    elif duplicated_blk.nsucc() == 1:
+        # 单分支，这里为什么要修改
+        # 因为我们复制的这个模块的最后一条命令有可能不是goto命令，顺序执行也会直接执行到下一个代码块。
+        # 如果是顺序执行，我们复制的这个代码块和原代码块代码不是位于同一个代码位置的，所以顺序执行不到目标的位置，需要我们把指令改成goto
+        print("  Making {0} goto {1}".format(duplicated_blk.serial, block_to_duplicate.succset[0]))
+        change_1way_block_successor(duplicated_blk, block_to_duplicate.succset[0])
+    elif duplicated_blk.nsucc() == 0:
+        print("  Duplicated block {0} has no successor => Nothing to do".format(duplicated_blk.serial))
+
+    return duplicated_blk, duplicated_blk_default
+
+
 def get_block_with_multiple_predecessors(var_histories: List[MopHistory]) -> Tuple[Union[None, mblock_t],
                                                                                    Union[None, Dict[int, List[MopHistory]]]]:
+
     for i, var_history in enumerate(var_histories):
         pred_blk = var_history.block_path[0]
         for block in var_history.block_path[1:]:
@@ -264,22 +341,23 @@ def try_to_duplicate_one_block(var_histories: List[MopHistory]) -> Tuple[int, in
         return nb_duplication, nb_change
     print("Block to duplicate found: {0} with {1} successors"
                  .format(block_to_duplicate.serial, block_to_duplicate.nsucc()))
-    i = 0
+    i = 0  #pred_serial 是被复制块的前驱的块号，pred_history_group，是被复制块和他的这个前驱所在的分支
     for pred_serial, pred_history_group in pred_dict.items():
         # We do not duplicate first group
         if i >= 1:
             print("  Before {0}: {1}"
                          .format(pred_serial, [var_history.block_serial_path for var_history in pred_history_group]))
             pred_block = mba.get_mblock(pred_serial)
+            #  返回两个块内，duplicated_blk_jmp 是复制的块，duplicated_blk_default 是 被复制块 多后继的时候产生的辅助块，复制duplicated_blk_jmp，可以跳转到 被复制块的顺序分支
             duplicated_blk_jmp, duplicated_blk_default = duplicate_block(block_to_duplicate)
             nb_duplication += 1 if duplicated_blk_jmp is not None else 0
             nb_duplication += 1 if duplicated_blk_default is not None else 0
             print("  Making {0} goto {1}".format(pred_block.serial, duplicated_blk_jmp.serial))
             if (pred_block.tail is None) or (not hr.is_mcode_jcond(pred_block.tail.opcode)):
-                change_1way_block_successor(pred_block, duplicated_blk_jmp.serial)
+                change_1way_block_successor(pred_block, duplicated_blk_jmp.serial)  # pred_block 的跳转目标地址变为 新复制出来的块
                 nb_change += 1
             else:
-                if block_to_duplicate.serial == pred_block.tail.d.b:
+                if block_to_duplicate.serial == pred_block.tail.d.b:             #  双分支的情况，判断需要修改那个跳转，找到跳转到被复制的那个块的位置，下面是双分支的单独修改
                     change_2way_block_conditional_successor(pred_block, duplicated_blk_jmp.serial)
                     nb_change += 1
                 else:
@@ -289,7 +367,7 @@ def try_to_duplicate_one_block(var_histories: List[MopHistory]) -> Tuple[int, in
                     nb_change += 1
 
             block_to_duplicate_default_successor = mba.get_mblock(block_to_duplicate.serial + 1)
-            print("  Now, we fix var histories...")
+            print("  Now, we fix var histories...")        # 遍历分支，将已经进行的分支修改，在这里进行及时更新
             for var_history in pred_history_group:
                 var_history.replace_block_in_path(block_to_duplicate, duplicated_blk_jmp)
                 if block_to_duplicate.tail is not None and hr.is_mcode_jcond(block_to_duplicate.tail.opcode):

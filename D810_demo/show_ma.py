@@ -11,6 +11,18 @@ import idaapi
 from graphviz import Digraph
 
 # -----------------------------------------------------------------------------
+class printer_t(hr.vd_printer_t):
+    """Converts microcode output to an array of strings."""
+    def __init__(self, *args):
+        hr.vd_printer_t.__init__(self)
+        self.mc = []
+
+    def get_mc(self):
+        return self.mc
+
+    def _print(self, indent, line):
+        self.mc.append(line)
+        return 1
 
 def ask_desired_maturity():
     """Displays a dialog which lets the user choose a maturity level
@@ -67,28 +79,16 @@ class microcode_viewer_t(kw.simplecustviewer_t):
         super().__init__()
         self.insn_map = {}  # 用于存储行号到 minsn_t 对象的映射
 
-    def Create(self, mba, title, mmat_name, fn_name):
+    def Create(self, mba, title, mmat_name, fn_name,lines = []):
         self.title = "Microcode: %s" % title
         self.mba = mba
         self.mmat_name = mmat_name
         self.fn_name = fn_name
         if not kw.simplecustviewer_t.Create(self, self.title):
             return False
-        line_no = 0
-        for blk_idx in range(mba.qty):
-            blk = mba.get_mblock(blk_idx)
-            insn = blk.head
-            index = 0
-            while insn:
-                line = "{0}.{1}\t{2}    {3}".format(blk_idx, index, hex(insn.ea), insn.dstr())
-                self.AddLine(line)
-                self.insn_map[line_no] = insn
-                index = index + 1
-                line_no += 1
-                if insn == blk.tail:
-                    break
-                insn = insn.next
-
+        self.lines = lines
+        for line in lines:
+            self.AddLine(line)
         return True
 
     def OnKeydown(self, vkey, shift):   #响应键盘事件  快捷键
@@ -369,10 +369,12 @@ def show_microcode():
     mba = hr.gen_microcode(mbr, hf, ml, hr.DECOMP_WARNINGS, mmat)
     if not mba:
         return (False, "0x%s: %s" % (addr_fmt % hf.errea, hf.desc()))
-
+    vp = printer_t()
     mba.set_mba_flags(mba.get_mba_flags() | mba_flags)
+    mba._print(vp)
+
     mcv = microcode_viewer_t()
-    if not mcv.Create(mba, "%s (%s)" % (fn_name, text), text, fn_name):
+    if not mcv.Create(mba, "%s (%s)" % (fn_name, text), text, fn_name,vp.get_mc()):
         return (False, "Error creating viewer")
 
     mcv.Show()
