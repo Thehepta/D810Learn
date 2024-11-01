@@ -281,7 +281,11 @@ def duplicate_block(block_to_duplicate: mblock_t) -> Tuple[mblock_t, mblock_t]:
     # 这个函数的主要作用就是，复制一个代码块，并且取保这个代码块的后续执行流程和原代码块一致
     print("    start duplicate_block")
     mba = block_to_duplicate.mba
+    # duplicated_blk = mba.copy_block(block_to_duplicate, mba.qty )
+    # 理论来说，应该在最后的位置添加一个块，但是ida最后一个位置是退出块 ，是个空块，添加了以后，反编译报错了，但是流程图显示是没有问题的。
+    # 在之后一个块前面添加一个块，会导致原来顺寻执行到这个序号的块，现在执行到了这个插入的块里，插入的这个块，现在多了一个预期之外的前驱
     duplicated_blk = mba.copy_block(block_to_duplicate, mba.qty - 1)
+
     print("  Duplicated {0} -> {1}".format(block_to_duplicate.serial, duplicated_blk.serial))
     duplicated_blk_default = None
     if (block_to_duplicate.tail is not None) and hr.is_mcode_jcond(block_to_duplicate.tail.opcode):
