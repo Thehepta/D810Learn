@@ -216,10 +216,9 @@ def insert_nop_blk(blk: mblock_t) -> mblock_t:
 
 def duplicate_block(block_to_duplicate: mblock_t) -> Tuple[mblock_t, mblock_t]:
     # 这个函数的主要作用就是，复制一个代码块，并且取保这个代码块的后续执行流程和原代码块一致
-    print("    start duplicate_block")
     mba = block_to_duplicate.mba
-    duplicated_blk = mba.copy_block(block_to_duplicate, mba.qty)
-    print("  Duplicated {0} -> {1}".format(block_to_duplicate.serial, duplicated_blk.serial))
+    duplicated_blk = mba.copy_block(block_to_duplicate, mba.qty - 1)
+    print("duplicate_block  Duplicated {0} -> {1}".format(block_to_duplicate.serial, duplicated_blk.serial))
     duplicated_blk_default = None
     if (block_to_duplicate.tail is not None) and hr.is_mcode_jcond(block_to_duplicate.tail.opcode):
         # 双分支，条件跳转判断
@@ -244,7 +243,17 @@ def duplicate_block(block_to_duplicate: mblock_t) -> Tuple[mblock_t, mblock_t]:
     elif duplicated_blk.nsucc() == 0:
         print("  Duplicated block {0} has no successor => Nothing to do".format(duplicated_blk.serial))
 
-
+    # 修复处理前驱
+    # 在测试中发现ida的这个代码复制逻辑没有处理前驱，开始我并没有想到，后来调试中我发现，microcode的这个代码块cfg,结束块必须唯一最后一个位置，不能在结束块
+    # 后面添加块，只能在前面添加，所以，复制了一个块，是在结束块的前面，这就导致，如果结束块的前驱是直接顺序执行到结束块的，在复制新块以后变成了执行到新的块，逻辑发生了改变
+    duplicated_blk_pre = duplicated_blk.serial - 1
+    duplicated_pre_blk = mba.get_mblock(duplicated_blk_pre)
+    if duplicated_pre_blk.tail is not None:
+        if duplicated_pre_blk.tail.opcode == hr.m_goto:
+            print("{0} is_simple_goto_block ".format(duplicated_pre_blk.serial))
+        else:
+            print("change_1way_block_successor {0} -> {1}".format(duplicated_pre_blk.serial,duplicated_blk.serial+1),
+            change_1way_block_successor(duplicated_pre_blk, duplicated_blk.serial+1))
 
     return duplicated_blk, duplicated_blk_default
 
