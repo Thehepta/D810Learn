@@ -104,6 +104,7 @@ class microcode_viewer_t(kw.simplecustviewer_t):
                 line_no += 1
                 if insn == blk.tail:
                     break
+
                 insn = insn.next
 
         return True
@@ -169,8 +170,8 @@ class microcode_viewer_t(kw.simplecustviewer_t):
             print("Failed to display the graph")
 
     def dominanceFlow(self):
-        import pydevd_pycharm
-        pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
+        # import pydevd_pycharm
+        # pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
         pre_black = None
         pre_num = -1
         for blk_idx in range(self._mba.qty):
@@ -269,9 +270,6 @@ def show_xrefs(mba,instr,mop):
             if insn == blk.tail:
                 break
             insn = insn.next
-
-
-
 
     ctx = hr.op_parent_info_t()
     # start = ctx.topins.next

@@ -8,8 +8,21 @@ import ida_hexrays as hr
 import ida_range
 import ida_pro
 import idaapi
+from graphviz import Digraph
 
 # -----------------------------------------------------------------------------
+class printer_t(hr.vd_printer_t):
+    """Converts microcode output to an array of strings."""
+    def __init__(self, *args):
+        hr.vd_printer_t.__init__(self)
+        self.mc = []
+
+    def get_mc(self):
+        return self.mc
+
+    def _print(self, indent, line):
+        self.mc.append(line)
+        return 1
 
 def ask_desired_maturity():
     """Displays a dialog which lets the user choose a maturity level
@@ -66,28 +79,16 @@ class microcode_viewer_t(kw.simplecustviewer_t):
         super().__init__()
         self.insn_map = {}  # 用于存储行号到 minsn_t 对象的映射
 
-    def Create(self, mba, title, mmat_name, fn_name):
+    def Create(self, mba, title, mmat_name, fn_name,lines = []):
         self.title = "Microcode: %s" % title
-        self._mba = mba
+        self.mba = mba
         self.mmat_name = mmat_name
         self.fn_name = fn_name
         if not kw.simplecustviewer_t.Create(self, self.title):
             return False
-        line_no = 0
-        for blk_idx in range(mba.qty):
-            blk = mba.get_mblock(blk_idx)
-            insn = blk.head
-            index = 0
-            while insn:
-                line = "{0}.{1}\t{2}    {3}".format(blk_idx, index, hex(insn.ea), insn.dstr())
-                self.AddLine(line)
-                self.insn_map[line_no] = insn
-                index = index + 1
-                line_no += 1
-                if insn == blk.tail:
-                    break
-                insn = insn.next
-
+        self.lines = lines
+        for line in lines:
+            self.AddLine(line)
         return True
 
     def OnKeydown(self, vkey, shift):   #响应键盘事件  快捷键
@@ -97,6 +98,45 @@ class microcode_viewer_t(kw.simplecustviewer_t):
             self.dominanceFlow()
         if vkey == ord("F"):
             self.codeFlow()
+        if vkey == ord("G"):
+            self.graphviz()
+
+    def graphviz(self ):
+        dot = Digraph()
+        dot.attr(splines='ortho')
+        for blk_idx in range(self.mba.qty):
+            blk = self.mba.get_mblock(blk_idx)
+            if blk.head == None:
+                continue
+            lines = []
+
+            lines.append("{0}:{1}".format(blk_idx, hex(blk.head.ea)))
+            insn = blk.head
+            while insn:
+                lines.append(insn.dstr())
+                if insn == blk.tail:
+                    break
+                insn = insn.next
+            label = "\n".join(lines)
+            dot.node(str(blk_idx), label=label, shape="rect", style="filled", fillcolor="lightblue")
+
+        for blk_idx in range(self.mba.qty):
+            blk = self.mba.get_mblock(blk_idx)
+            succset = [x for x in blk.succset]
+            for succ in succset:
+                blk_succ = self.mba.get_mblock(succ)
+                if blk_succ.head is None:
+                    continue
+                if blk.head is None:
+                    continue
+                dot.edge(str(blk_idx), str(succ))
+
+        # dot.render("/home/chic/graph_with_contentgraph_with_content", format="png")
+        output_path = "/home/chic/graph_with_content.dot"
+        with open(output_path, "w") as f:
+            f.write(dot.source)
+        # dot.render("/home/chic/graph_with_content", format="png")
+        print("dot已保存为 graph_with_content.png")
 
     def codeFlow(self):
         class MyGraph(idaapi.GraphViewer):
@@ -122,7 +162,7 @@ class microcode_viewer_t(kw.simplecustviewer_t):
                         insn = insn.next
                     label = "\n".join(lines)
                     node_id = self.AddNode(label)
-                    nodes[blk.head.ea] = node_id
+                    nodes[blk_idx] = node_id
 
                 for blk_idx in range(self._mba.qty):
                     blk = self._mba.get_mblock(blk_idx)
@@ -133,8 +173,7 @@ class microcode_viewer_t(kw.simplecustviewer_t):
                             continue
                         if blk.head == None:
                             continue
-                        if blk_succ.head.ea in nodes:
-                            self.AddEdge(nodes[blk.head.ea], nodes[blk_succ.head.ea])
+                        self.AddEdge(nodes[blk_idx], nodes[blk_succ.serial])
                 return True
 
             def OnGetText(self, node_id):
@@ -143,17 +182,17 @@ class microcode_viewer_t(kw.simplecustviewer_t):
 
 
         title = "Fun microcode FlowChart"
-        graph = MyGraph(title, self._mba)
+        graph = MyGraph(title, self.mba)
         if not graph.Show():
             print("Failed to display the graph")
 
     def dominanceFlow(self):
-        import pydevd_pycharm
-        pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
+        # import pydevd_pycharm
+        # pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
         pre_black = None
         pre_num = -1
-        for blk_idx in range(self._mba.qty):
-            blk = self._mba.get_mblock(blk_idx)
+        for blk_idx in range(self.mba.qty):
+            blk = self.mba.get_mblock(blk_idx)
             # print(pre_num,len(blk.predset))
             if(pre_num < len(blk.predset)):
                 pre_black = blk
@@ -184,19 +223,19 @@ class microcode_viewer_t(kw.simplecustviewer_t):
         cond_ml = hr.mlist_t()
         blk.append_use_list(cond_ml, cond_mod_t, hr.MUST_ACCESS)
         for path in paths:
-            block_paht=[]
-            for serial in path:
-                blk = self._mba.get_mblock(serial)
-                cur_ins = blk.head
-                while cur_ins is not None:
-                    def_list = blk.build_def_list(cur_ins, hr.MAY_ACCESS | hr.FULL_XDSU)
+            print(path)
+            # for serial in path:
+            #     blk = self._mba.get_mblock(serial)
+            #     cur_ins = blk.head
+            #     while cur_ins is not None:
+            #         def_list = blk.build_def_list(cur_ins, hr.MAY_ACCESS | hr.FULL_XDSU)
                     # for defs in def_list:
-                    if cond_ml.has_common(def_list):
-                        print(path)
-                        print(cur_ins.dstr())
+                    # if cond_ml.has_common(def_list):
+                        # print(path)
+                        # print(cur_ins.dstr())
                     #     print(def_list.dstr())
                     #     break
-                    cur_ins = cur_ins.next
+                    # cur_ins = cur_ins.next
 
 
                 # block_paht.append(blk)
@@ -210,8 +249,8 @@ class microcode_viewer_t(kw.simplecustviewer_t):
                 # print(use)
 
     def xref(self):
-        import pydevd_pycharm
-        pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
+        # import pydevd_pycharm
+        # pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
 
         # print(self.GetLine(self.GetLineNo()))   #打印出这一行的字符串
         # print()               #打印行号
@@ -228,13 +267,13 @@ class microcode_viewer_t(kw.simplecustviewer_t):
 
         if selectCurrentWord.find(mop_l_str) != -1:
             print(mop_l_str)
-            show_xrefs(self._mba,ins_token,ins_token.l)
+            show_xrefs(self.mba, ins_token, ins_token.l)
         if selectCurrentWord.find(mop_d_str) != -1:
             print(mop_d_str)
-            show_xrefs(self._mba,ins_token,ins_token.d)
+            show_xrefs(self.mba, ins_token, ins_token.d)
         if selectCurrentWord.find(mop_r_str) != -1:
             print(mop_r_str)
-            show_xrefs(self._mba,ins_token,ins_token.r)
+            show_xrefs(self.mba, ins_token, ins_token.r)
 
         # print(mop_l_str,mop_r_str,mop_d_str)
         # print(selectCurrentWord)
@@ -330,10 +369,12 @@ def show_microcode():
     mba = hr.gen_microcode(mbr, hf, ml, hr.DECOMP_WARNINGS, mmat)
     if not mba:
         return (False, "0x%s: %s" % (addr_fmt % hf.errea, hf.desc()))
-
+    vp = printer_t()
     mba.set_mba_flags(mba.get_mba_flags() | mba_flags)
+    mba._print(vp)
+
     mcv = microcode_viewer_t()
-    if not mcv.Create(mba, "%s (%s)" % (fn_name, text), text, fn_name):
+    if not mcv.Create(mba, "%s (%s)" % (fn_name, text), text, fn_name,vp.get_mc()):
         return (False, "Error creating viewer")
 
     mcv.Show()
