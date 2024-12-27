@@ -47,12 +47,13 @@ class adjustOllvmDispatcherInfo(GenericDispatcherInfo):
         if (num_mop is None) or (mop_compared is None):
             return False
         # Its fathers are not conditional branch with this mop
-        for father_serial in blk.predset:
-            father_blk = self.mba.get_mblock(father_serial)
-            father_num_mop, father_mop_compared = self._get_comparison_info(father_blk)
-            if (father_num_mop is not None) and (father_mop_compared is not None):
-                if mop_compared.equal_mops(father_mop_compared, hr.EQ_IGNSIZE):
-                    return False
+        #fix 1.so文件分发器识别中， 下面这部分代码，遍历所有的分发器的前驱，如果前驱有值，但是不能是hr.EQ_IGNSIZE(这个应该是判断条件跳转的)指令，这个可能是由子分发器引起的问题
+        # for father_serial in blk.predset:
+        #     father_blk = self.mba.get_mblock(father_serial)
+        #     father_num_mop, father_mop_compared = self._get_comparison_info(father_blk)
+        #     if (father_num_mop is not None) and (father_mop_compared is not None):
+        #         if mop_compared.equal_mops(father_mop_compared, hr.EQ_IGNSIZE):
+        #             return False
         return True
 
     def _get_comparison_info(self, blk: mblock_t) -> Tuple[mop_t, mop_t]:
@@ -70,6 +71,7 @@ class adjustOllvmDispatcherInfo(GenericDispatcherInfo):
         if not is_ok:
             return False
         if (block_info.blk.tail is not None) and (block_info.blk.tail.opcode not in FLATTENING_JUMP_OPCODES):
+            print("is_part_of_dispatcher block_info:", block_info.blk.serial)
             return False
         return True
 
@@ -129,17 +131,24 @@ class adjustOllvmDispatcherCollector():
         # self.remove_sub_dispatchers()
         return self.dispatcher_list
 
-    def collector(self, mba):
-        for blk_idx in range(mba.qty):
-            blk = mba.get_mblock(blk_idx)
-            if blk.serial == 8:
-                disp_info = self.DISPATCHER_CLASS(blk.mba)
-                if disp_info.explore(blk):
-                    self.dispatcher_list.append(disp_info)
-            if blk.serial == 3:                              #目前有前有问题，识别分发器错误
-                disp_info = self.DISPATCHER_CLASS(blk.mba)
-                if disp_info.explore(blk):
-                    self.dispatcher_list.append(disp_info)
+    def set_dispatch_block(self, mba,serial_block) ->bool:
+        blk = mba.get_mblock(serial_block)
+        disp_info = self.DISPATCHER_CLASS(blk.mba)
+        if disp_info.explore(blk):
+            self.dispatcher_list.append(disp_info)
+            return True
+        else:
+            return False
+        # for blk_idx in range(mba.qty):
+        #     blk = mba.get_mblock(blk_idx)
+        #     if blk.serial == serial_block:
+        #         disp_info = self.DISPATCHER_CLASS(blk.mba)
+        #         if disp_info.explore(blk):
+        #             self.dispatcher_list.append(disp_info)
+            # if blk.serial == 3:
+            #     disp_info = self.DISPATCHER_CLASS(blk.mba)
+            #     if disp_info.explore(blk):
+            #         self.dispatcher_list.append(disp_info)
 
 
 class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
@@ -160,10 +169,20 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
     def func(self, blk: mblock_t):
 
         self.mba = blk.mba
-        self.retrieve_all_dispatchers()
-        print("dispatcher_list = ",len(self.dispatcher_list))
-        self.last_pass_nb_patch_done = self.remove_flattening()
+        self.last_pass_nb_patch_done = 0
+        if blk.mba.maturity != hr.MMAT_GLBOPT2:
+            return 0
+        if True == self.set_dispatch_block(25):
+            print("dispatcher_list = ",len(self.dispatcher_list))
+            self.last_pass_nb_patch_done = self.remove_flattening()
+        else:
+            print("add dispatch failed")
 
+        # if True == self.set_dispatch_block(3):
+        #     print("dispatcher_list = ",len(self.dispatcher_list))
+        #     self.last_pass_nb_patch_done = self.remove_flattening()
+        # else:
+        #     print("add dispatch failed")
         # if not self.check_if_rule_should_be_used(blk):
         #     return 0
         # self.last_pass_nb_patch_done = 0
@@ -183,8 +202,8 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
         # if self.last_pass_nb_patch_done + nb_clean + self.non_significant_changes > 0:
         #     self.mba.mark_chains_dirty()
         #     self.mba.optimize_local(0)
-        # self.mba.verify(True)
-        # return self.last_pass_nb_patch_done
+        self.mba.verify(True)
+        return self.last_pass_nb_patch_done
 
 
     def start(self):
@@ -221,17 +240,35 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
         ml = hr.mlist_t()
         #
         self.mba = hr.gen_microcode(mbr, hf, ml, hr.DECOMP_WARNINGS, mmat)
+        # import pydevd_pycharm
+        # pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
+        if True == self.set_dispatch_block(25):
+            print("dispatcher_list = ",len(self.dispatcher_list))
+            self.last_pass_nb_patch_done = self.remove_flattening()
+        else:
+            print("add dispatch failed")
 
-        self.retrieve_all_dispatchers()
-        print("dispatcher_list = ",len(self.dispatcher_list))
-        self.last_pass_nb_patch_done = self.remove_flattening()
+        if True == self.set_dispatch_block(3):
+            print("dispatcher_list = ",len(self.dispatcher_list))
+            self.last_pass_nb_patch_done = self.remove_flattening()
+        else:
+            print("add dispatch failed")
 
 
+    def set_dispatch_block(self,block_serial) -> bool:
+        self.dispatcher_list = []
+        if True == self.dispatcher_collector.set_dispatch_block(self.mba,block_serial):
+
+            self.dispatcher_list = [x for x in self.dispatcher_collector.get_dispatcher_list()]
+            return True
+        else:
+            return False
 
     def retrieve_all_dispatchers(self):
-        self.dispatcher_list = []
-        self.dispatcher_collector.collector(self.mba)
-        self.dispatcher_list = [x for x in self.dispatcher_collector.get_dispatcher_list()]
+        pass
+        # self.dispatcher_list = []
+        # self.dispatcher_collector.set_dispatch_block(self.mba)
+        # self.dispatcher_list = [x for x in self.dispatcher_collector.get_dispatcher_list()]
 
     def remove_flattening(self) -> int:
         # import pydevd_pycharm
@@ -301,8 +338,6 @@ class blkOPt(hr.optblock_t):
             return 0
         print(blk.mba.maturity, hex(blk.head.ea))
         if blk.mba.maturity != hr.MMAT_GLBOPT2:
-            return 0
-        if blk.serial != 8:
             return 0
         print("UnflattenerFakeJump ")
 

@@ -183,55 +183,44 @@ class microcode_viewer_t(kw.simplecustviewer_t):
 
     def OnKeydown(self, vkey, shift):   #响应键盘事件  快捷键
         if vkey == ord("F"):
-            print("FFF")
             self.codeFlow()
 
 
     def codeFlow(self):
-        class MyGraph(idaapi.GraphViewer):
+        class microcode_graphviewer_t(idaapi.GraphViewer):
             def __init__(self, title, mba):
+                # title = "Microcode graph: %s" % title
                 idaapi.GraphViewer.__init__(self, title)
                 self._mba = mba
+                self._mba.set_mba_flags(hr.MBA_SHORT)
+                mba.build_graph()
+
 
             def OnRefresh(self):
                 self.Clear()
-                nodes = {}
-                for blk_idx in range(self._mba.qty):
-                    blk = self._mba.get_mblock(blk_idx)
-                    if blk.head == None:
-                        continue
-                    lines = []
-
-                    lines.append("{0}:{1}".format(blk_idx,hex(blk.head.ea)))
-                    insn = blk.head
-                    while insn:
-                        lines.append(insn.dstr())
-                        if insn == blk.tail:
-                            break
-                        insn = insn.next
-                    label = "\n".join(lines)
-                    node_id = self.AddNode(label)
-                    nodes[blk_idx] = node_id
-
-                for blk_idx in range(self._mba.qty):
-                    blk = self._mba.get_mblock(blk_idx)
-                    succset_list = [x for x in blk.succset]
-                    for succ in succset_list:
-                        blk_succ = self._mba.get_mblock(succ)
-                        if blk_succ.head == None:
-                            continue
-                        if blk.head == None:
-                            continue
-                        self.AddEdge(nodes[blk_idx], nodes[blk_succ.serial])
+                qty = self._mba.qty
+                for src in range(qty):
+                    self.AddNode(src)
+                for src in range(qty):
+                    mblock = self._mba.get_mblock(src)
+                    for dest in mblock.succset:
+                        self.AddEdge(src, dest)
                 return True
 
-            def OnGetText(self, node_id):
-                return self[node_id]
-        title = "Fun microcode FlowChart2"
-        graph = MyGraph(title, self.mba)
+            def OnGetText(self, node):
+                mblock = self._mba.get_mblock(node)
+                vp = hr.qstring_printer_t(None, True)
+                mblock._print(vp)
+                if mblock.serial == 0:
+                    return "start"
+                if mblock.serial == self._mba.qty-1:
+                    return "end"
+                return vp.s
+
+        title = "Fun microcode FlowChart"
+        graph = microcode_graphviewer_t(title, self.mba)
         if not graph.Show():
             print("Failed to display the graph")
-
 
 
 
@@ -278,7 +267,7 @@ def insert_nop_blk(blk: mblock_t) -> mblock_t:
 
 
 def duplicate_block(block_to_duplicate: mblock_t) -> Tuple[mblock_t, mblock_t]:
-    # 这个函数的主要作用就是，复制一个代码块，并且取保这个代码块的后续执行流程和原代码块一致
+    # 这个函数的主要作用就是，复制一个代码块，并且确保这个代码块的后续执行流程和原代码块一致
     print("    start duplicate_block")
     mba = block_to_duplicate.mba
     # duplicated_blk = mba.copy_block(block_to_duplicate, mba.qty )
@@ -310,6 +299,18 @@ def duplicate_block(block_to_duplicate: mblock_t) -> Tuple[mblock_t, mblock_t]:
         change_1way_block_successor(duplicated_blk, block_to_duplicate.succset[0])
     elif duplicated_blk.nsucc() == 0:
         print("  Duplicated block {0} has no successor => Nothing to do".format(duplicated_blk.serial))
+
+    # 修复处理前驱
+    # 在测试中发现ida的这个代码复制逻辑没有处理前驱，开始我并没有想到，后来调试中我发现，microcode的这个代码块cfg,结束块必须唯一最后一个位置，不能在结束块
+    # 后面添加块，只能在前面添加，所以，复制了一个块，是在结束块的前面，这就导致，如果结束块的前驱是直接顺序执行到结束块的，在复制新块以后变成了执行到新的块，逻辑发生了改变
+    duplicated_blk_pre = duplicated_blk.serial - 1
+    duplicated_pre_blk = mba.get_mblock(duplicated_blk_pre)
+    if duplicated_pre_blk.tail.opcode == hr.m_goto:
+        print("{0} is_simple_goto_block ".format(duplicated_pre_blk.serial))
+    else:
+        print("change_1way_block_successor {0} -> {1}".format(duplicated_pre_blk.serial,duplicated_blk.serial+1),
+        change_1way_block_successor(duplicated_pre_blk, duplicated_blk.serial+1))
+
 
     return duplicated_blk, duplicated_blk_default
 

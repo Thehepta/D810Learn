@@ -110,13 +110,13 @@ class microcode_viewer_t(kw.simplecustviewer_t):
         return True
 
     def OnKeydown(self, vkey, shift):   #响应键盘事件  快捷键
-        if vkey == ord("G"):
-            print("OnKeydown")
+        if vkey == ord("X"):
+            print("xref")
             self.xref()
         if vkey == ord("D"):
-            print("OnKeydown")
+            print("dominanceFlow algorithm")
             self.dominanceFlow()
-        if vkey == ord("F"):
+        if vkey == ord("G"):
             print("OnKeydown")
             self.codeFlow()
 

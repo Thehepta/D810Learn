@@ -1,10 +1,11 @@
 import sys
-
+import re
 import ida_kernwin as kw
 import ida_funcs
 import ida_ida
 import ida_bytes
 import ida_hexrays as hr
+import ida_lines
 import ida_range
 import ida_pro
 import idaapi
@@ -139,50 +140,38 @@ class microcode_viewer_t(kw.simplecustviewer_t):
         print("dot已保存为 graph_with_content.png")
 
     def codeFlow(self):
-        class MyGraph(idaapi.GraphViewer):
+        class microcode_graphviewer_t(idaapi.GraphViewer):
             def __init__(self, title, mba):
+                # title = "Microcode graph: %s" % title
                 idaapi.GraphViewer.__init__(self, title)
                 self._mba = mba
+                self._mba.set_mba_flags(hr.MBA_SHORT)
+                mba.build_graph()
+
 
             def OnRefresh(self):
                 self.Clear()
-                nodes = {}
-                for blk_idx in range(self._mba.qty):
-                    blk = self._mba.get_mblock(blk_idx)
-                    if blk.head == None:
-                        continue
-                    lines = []
-
-                    lines.append("{0}:{1}".format(blk_idx,hex(blk.head.ea)))
-                    insn = blk.head
-                    while insn:
-                        lines.append(insn.dstr())
-                        if insn == blk.tail:
-                            break
-                        insn = insn.next
-                    label = "\n".join(lines)
-                    node_id = self.AddNode(label)
-                    nodes[blk_idx] = node_id
-
-                for blk_idx in range(self._mba.qty):
-                    blk = self._mba.get_mblock(blk_idx)
-                    succset_list = [x for x in blk.succset]
-                    for succ in succset_list:
-                        blk_succ = self._mba.get_mblock(succ)
-                        if blk_succ.head == None:
-                            continue
-                        if blk.head == None:
-                            continue
-                        self.AddEdge(nodes[blk_idx], nodes[blk_succ.serial])
+                qty = self._mba.qty
+                for src in range(qty):
+                    self.AddNode(src)
+                for src in range(qty):
+                    mblock = self._mba.get_mblock(src)
+                    for dest in mblock.succset:
+                        self.AddEdge(src, dest)
                 return True
 
-            def OnGetText(self, node_id):
-                return self[node_id]
-
-
+            def OnGetText(self, node):
+                mblock = self._mba.get_mblock(node)
+                vp = hr.qstring_printer_t(None, True)
+                mblock._print(vp)
+                if mblock.serial == 0:
+                    return "start"
+                if mblock.serial == self._mba.qty-1:
+                    return "end"
+                return vp.s
 
         title = "Fun microcode FlowChart"
-        graph = MyGraph(title, self.mba)
+        graph = microcode_graphviewer_t(title, self.mba)
         if not graph.Show():
             print("Failed to display the graph")
 

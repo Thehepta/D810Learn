@@ -6,52 +6,30 @@ import ida_ida
 import ida_range
 from d810.hexrays_formatters import format_minsn_t
 from d810.cfg_utils import mba_deep_cleaning, change_1way_block_successor, create_block
-from d810.hexrays_helpers import append_mop_if_not_in_list, extract_num_mop, CONTROL_FLOW_OPCODES,get_blk_index
+from d810.hexrays_helpers import append_mop_if_not_in_list, extract_num_mop, CONTROL_FLOW_OPCODES
 from d810.optimizers.flow.flattening.generic import GenericDispatcherBlockInfo, GenericDispatcherUnflatteningRule
 from d810.optimizers.flow.flattening.generic import GenericDispatcherInfo
 from d810.optimizers.flow.flattening.unflattener import OllvmDispatcherCollector
 from d810.optimizers.flow.flattening.utils import NotResolvableFatherException, get_all_possibles_values, \
     NotDuplicableFatherException
-from d810.tracker import MopHistory, MopTracker
+from d810.hexrays_helpers import equal_mops_ignore_size, get_mop_index, get_blk_index
 from d810.cfg_utils import change_1way_block_successor, change_2way_block_conditional_successor
-
+from d810.tracker import MopHistory, MopTracker
 from ida_hexrays import mblock_t, mop_t, optblock_t, minsn_visitor_t, mbl_array_t
 import ida_hexrays as hr
 import ida_kernwin as kw
 import logging
-from graphviz import Digraph
-import os
 from typing import List, Union, Tuple, Dict
 
+from graphviz import Digraph
+import os
+
+import idaapi
 
 FLATTENING_JUMP_OPCODES = [hr.m_jnz, hr.m_jz, hr.m_jae, hr.m_jb, hr.m_ja, hr.m_jbe, hr.m_jg, hr.m_jge, hr.m_jl,
                            hr.m_jle]
 
 opt_count = 0
-
-
-os.environ['PATH'] = os.pathsep + r'C:\Program Files\Graphviz\bin'
-
-
-def  showMicrocodeGraph(mba:mblock_t):
-    dot = Digraph()
-
-    for blk_idx in range(mba.qty):
-        blk = mba.get_mblock(blk_idx)
-        dot.node(str(blk_idx),)
-
-        insn = blk.head
-        index = 0
-        # while insn:
-        #     line = "{0}.{1}\t{2}    {3}".format(blk_idx, index, hex(insn.ea), insn.dstr())
-        #     self.AddLine(line)
-        #     self.insn_map[line_no] = insn
-        #     index = index + 1
-        #     line_no += 1
-        #     if insn == blk.tail:
-        #         break
-        #
-        #     insn = insn.next
 
 
 class adjustOllvmDispatcherInfo(GenericDispatcherInfo):
@@ -81,12 +59,12 @@ class adjustOllvmDispatcherInfo(GenericDispatcherInfo):
         if (num_mop is None) or (mop_compared is None):
             return False
         # Its fathers are not conditional branch with this mop
-        for father_serial in blk.predset:
-            father_blk = self.mba.get_mblock(father_serial)
-            father_num_mop, father_mop_compared = self._get_comparison_info(father_blk)
-            if (father_num_mop is not None) and (father_mop_compared is not None):
-                if mop_compared.equal_mops(father_mop_compared, hr.EQ_IGNSIZE):
-                    return False
+        # for father_serial in blk.predset:
+        #     father_blk = self.mba.get_mblock(father_serial)
+        #     father_num_mop, father_mop_compared = self._get_comparison_info(father_blk)
+        #     if (father_num_mop is not None) and (father_mop_compared is not None):
+        #         if mop_compared.equal_mops(father_mop_compared, hr.EQ_IGNSIZE):
+        #             return False
         return True
 
     def _get_comparison_info(self, blk: mblock_t) -> Tuple[mop_t, mop_t]:
@@ -161,14 +139,92 @@ class adjustOllvmDispatcherCollector():
         self.collector(cur_blk)
         return self.dispatcher_list
 
-    def collector(self, cur_blk):
-        if cur_blk.serial == 2:
-            global opt_count
-            print("opt_count = ",opt_count)
-            opt_count = opt_count + 1
-            disp_info = self.DISPATCHER_CLASS(cur_blk.mba)
-            if disp_info.explore(cur_blk):
-                self.dispatcher_list.append(disp_info)
+    def collector(self, mba):
+        for blk_idx in range(mba.qty):
+            blk = mba.get_mblock(blk_idx)
+            if blk.serial == 25:
+                disp_info = self.DISPATCHER_CLASS(blk.mba)
+                if disp_info.explore(blk):
+                    self.dispatcher_list.append(disp_info)
+            if blk.serial == 3:
+                disp_info = self.DISPATCHER_CLASS(blk.mba)
+                if disp_info.explore(blk):
+                    self.dispatcher_list.append(disp_info)
+
+
+
+class microcode_viewer_t(kw.simplecustviewer_t):
+    """Creates a widget that displays Hex-Rays microcode."""
+
+    def __init__(self):
+        super().__init__()
+        self.insn_map = {}  # 用于存储行号到 minsn_t 对象的映射
+
+    def Create(self, mba, title, mmat_name, fn_name):
+        self.title = "Microcode: %s" % title
+        self.mba = mba
+        self.mmat_name = mmat_name
+        self.fn_name = fn_name
+        if not kw.simplecustviewer_t.Create(self, self.title):
+            return False
+        line_no = 0
+        for blk_idx in range(mba.qty):
+            blk = mba.get_mblock(blk_idx)
+            insn = blk.head
+            index = 0
+            while insn:
+                line = "{0}.{1}\t{2}    {3}".format(blk_idx, index, hex(insn.ea), insn.dstr())
+                self.AddLine(line)
+                self.insn_map[line_no] = insn
+                index = index + 1
+                line_no += 1
+                if insn == blk.tail:
+                    break
+                insn = insn.next
+
+        return True
+
+    def OnKeydown(self, vkey, shift):   #响应键盘事件  快捷键
+        if vkey == ord("F"):
+            self.codeFlow()
+
+
+    def codeFlow(self):
+        class microcode_graphviewer_t(idaapi.GraphViewer):
+            def __init__(self, title, mba):
+                # title = "Microcode graph: %s" % title
+                idaapi.GraphViewer.__init__(self, title)
+                self._mba = mba
+                self._mba.set_mba_flags(hr.MBA_SHORT)
+                mba.build_graph()
+
+
+            def OnRefresh(self):
+                self.Clear()
+                qty = self._mba.qty
+                for src in range(qty):
+                    self.AddNode(src)
+                for src in range(qty):
+                    mblock = self._mba.get_mblock(src)
+                    for dest in mblock.succset:
+                        self.AddEdge(src, dest)
+                return True
+
+            def OnGetText(self, node):
+                mblock = self._mba.get_mblock(node)
+                vp = hr.qstring_printer_t(None, True)
+                mblock._print(vp)
+                if mblock.serial == 0:
+                    return "start"
+                if mblock.serial == self._mba.qty-1:
+                    return "end"
+                return vp.s
+
+        title = "Fun microcode FlowChart"
+        graph = microcode_graphviewer_t(title, self.mba)
+        if not graph.Show():
+            print("Failed to display the graph")
+
 
 
 def insert_nop_blk(blk: mblock_t) -> mblock_t:
@@ -213,12 +269,16 @@ def insert_nop_blk(blk: mblock_t) -> mblock_t:
         raise e
 
 
-
 def duplicate_block(block_to_duplicate: mblock_t) -> Tuple[mblock_t, mblock_t]:
-    # 这个函数的主要作用就是，复制一个代码块，并且取保这个代码块的后续执行流程和原代码块一致
+    # 这个函数的主要作用就是，复制一个代码块，并且确保这个代码块的后续执行流程和原代码块一致
+    print("    start duplicate_block")
     mba = block_to_duplicate.mba
+    # duplicated_blk = mba.copy_block(block_to_duplicate, mba.qty )
+    # 理论来说，应该在最后的位置添加一个块，但是ida最后一个位置是退出块 ，是个空块，添加了以后，反编译报错了，但是流程图显示是没有问题的。
+    # 在之后一个块前面添加一个块，会导致原来顺寻执行到这个序号的块，现在执行到了这个插入的块里，插入的这个块，现在多了一个预期之外的前驱
     duplicated_blk = mba.copy_block(block_to_duplicate, mba.qty - 1)
-    print("duplicate_block  Duplicated {0} -> {1}".format(block_to_duplicate.serial, duplicated_blk.serial))
+
+    print("  Duplicated {0} -> {1}".format(block_to_duplicate.serial, duplicated_blk.serial))
     duplicated_blk_default = None
     if (block_to_duplicate.tail is not None) and hr.is_mcode_jcond(block_to_duplicate.tail.opcode):
         # 双分支，条件跳转判断
@@ -248,12 +308,12 @@ def duplicate_block(block_to_duplicate: mblock_t) -> Tuple[mblock_t, mblock_t]:
     # 后面添加块，只能在前面添加，所以，复制了一个块，是在结束块的前面，这就导致，如果结束块的前驱是直接顺序执行到结束块的，在复制新块以后变成了执行到新的块，逻辑发生了改变
     duplicated_blk_pre = duplicated_blk.serial - 1
     duplicated_pre_blk = mba.get_mblock(duplicated_blk_pre)
-    if duplicated_pre_blk.tail is not None:
-        if duplicated_pre_blk.tail.opcode == hr.m_goto:
-            print("{0} is_simple_goto_block ".format(duplicated_pre_blk.serial))
-        else:
-            print("change_1way_block_successor {0} -> {1}".format(duplicated_pre_blk.serial,duplicated_blk.serial+1),
-            change_1way_block_successor(duplicated_pre_blk, duplicated_blk.serial+1))
+    if duplicated_pre_blk.tail.opcode == hr.m_goto:
+        print("{0} is_simple_goto_block ".format(duplicated_pre_blk.serial))
+    else:
+        print("change_1way_block_successor {0} -> {1}".format(duplicated_pre_blk.serial,duplicated_blk.serial+1),
+        change_1way_block_successor(duplicated_pre_blk, duplicated_blk.serial+1))
+
 
     return duplicated_blk, duplicated_blk_default
 
@@ -352,6 +412,9 @@ def duplicate_histories(var_histories: List[MopHistory], max_nb_pass: int = 10) 
 
 
 
+
+
+
 class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
     DISPATCHER_COLLECTOR_CLASS = adjustOllvmDispatcherCollector
     DEFAULT_MAX_PASSES = 5
@@ -391,47 +454,10 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
         self.mba.verify(True)
         return self.last_pass_nb_patch_done
 
-    def graphviz(self ):
-        dot = Digraph()
-        dot.attr(splines='ortho')
-        for blk_idx in range(self.mba.qty):
-            blk = self.mba.get_mblock(blk_idx)
-            if blk.head == None:
-                continue
-            lines = []
-
-            lines.append("{0}:{1}".format(blk_idx, hex(blk.head.ea)))
-            insn = blk.head
-            while insn:
-                lines.append(insn.dstr())
-                if insn == blk.tail:
-                    break
-                insn = insn.next
-            label = "\n".join(lines)
-            dot.node(str(blk_idx), label=label, shape="rect", style="filled", fillcolor="lightblue")
-
-        for blk_idx in range(self.mba.qty):
-            blk = self.mba.get_mblock(blk_idx)
-            succset = [x for x in blk.succset]
-            for succ in succset:
-                blk_succ = self.mba.get_mblock(succ)
-                if blk_succ.head is None:
-                    continue
-                if blk.head is None:
-                    continue
-                dot.edge(str(blk_idx), str(succ))
-
-        # dot.render("/home/chic/graph_with_contentgraph_with_content", format="png")
-        output_path = "/home/chic/graph_with_content.dot"
-        with open(output_path, "w") as f:
-            f.write(dot.source)
-        # dot.render("/home/chic/graph_with_content", format="png")
-        print("dot已保存为 graph_with_content.png")
-
 
     def start(self):
-        import pydevd_pycharm
-        pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
+        # import pydevd_pycharm
+        # pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
         sel, sea, eea = kw.read_range_selection(None)
         pfn = ida_funcs.get_func(kw.get_screen_ea())
         if not sel and not pfn:
@@ -463,17 +489,29 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
         ml = hr.mlist_t()
         #
         self.mba = hr.gen_microcode(mbr, hf, ml, hr.DECOMP_WARNINGS, mmat)
+        for blk_idx in range(self.mba.qty):
+            blk = self.mba.get_mblock(blk_idx)
+            self.cur_blk = blk
+            self.retrieve_all_dispatchers()
+            if len(self.dispatcher_list) != 0:
+                break
 
-        self.retrieve_all_dispatchers()
         print("dispatcher_list = ", len(self.dispatcher_list))
         self.last_pass_nb_patch_done = self.remove_flattening()
+
+        mcv = microcode_viewer_t()
+        if not mcv.Create(self.mba, "%s (%s)" % (fn_name, text), text, fn_name):
+            return (False, "Error creating viewer")
+
+        mcv.Show()
 
     def retrieve_all_dispatchers(self):
         self.dispatcher_list = []
         self.dispatcher_list = [x for x in self.dispatcher_collector.get_dispatcher_list(self.cur_blk)]
 
     def remove_flattening(self) -> int:
-
+        # import pydevd_pycharm
+        # pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
         total_nb_change = 0
         for dispatcher_info in self.dispatcher_list:
             print("dispatcher_info:", hex(dispatcher_info.entry_block.blk.start))
@@ -489,22 +527,12 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
                 print("ensure_dispatcher_father_is_resolvable is changle,return")
                 # self.graphviz()
                 return total_nb_change
-            dispatcher_father_list = [self.mba.get_mblock(x) for x in dispatcher_info.entry_block.blk.predset]
-            print("start patch is len:",len(dispatcher_father_list))
-            nb_flattened_branches = 0
-            for dispatcher_father in dispatcher_father_list:
-                try:
-                    nb_flattened_branches += self.resolve_dispatcher_father(dispatcher_father, dispatcher_info)
-                except NotResolvableFatherException as e:
-                    print("NotResolvableFatherException")
-                    print(e)
         return total_nb_change
 
     def ensure_dispatcher_father_is_resolvable(self, dispatcher_father: mblock_t,
                                                dispatcher_entry_block: GenericDispatcherBlockInfo) -> int:
         # if dispatcher_father.serial == 19:
         #     print("entry block 19")
-            # showMicrocodeGraph(self.mba)
         father_histories = self.get_dispatcher_father_histories(dispatcher_father, dispatcher_entry_block)
         father_histories_cst = get_all_possibles_values(father_histories, dispatcher_entry_block.use_before_def_list,
                                                         verbose=False)
@@ -525,44 +553,6 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
               .format(dispatcher_entry_block.serial, dispatcher_father.serial, nb_duplication, nb_change))
         return nb_duplication + nb_change
 
-    def resolve_dispatcher_father(self, dispatcher_father: mblock_t, dispatcher_info) -> int:
-        dispatcher_father_histories = self.get_dispatcher_father_histories(dispatcher_father,
-                                                                           dispatcher_info.entry_block)
-        father_is_resolvable = self.check_if_histories_are_resolved(dispatcher_father_histories)
-        if not father_is_resolvable:
-            raise NotResolvableFatherException("Can't fix block {0}".format(dispatcher_father.serial))
-        mop_searched_values_list = get_all_possibles_values(dispatcher_father_histories,
-                                                            dispatcher_info.entry_block.use_before_def_list,
-                                                            verbose=False)
-
-        ref_mop_searched_values = mop_searched_values_list[0]
-        print("father_block:", dispatcher_father.serial)
-        print("cvlist:", len(mop_searched_values_list))
-        for tmp_mop_searched_values in mop_searched_values_list:
-            if tmp_mop_searched_values != ref_mop_searched_values:
-                raise NotResolvableFatherException("Dispatcher {0} predecessor {1} is not resolvable: {2}"
-                                                   .format(dispatcher_info.entry_block.serial, dispatcher_father.serial,
-                                                           mop_searched_values_list))
-
-            # print("cv:", hex(tmp_mop_searched_values[0]))
-        target_blk, disp_ins = dispatcher_info.emulate_dispatcher_with_father_history(dispatcher_father_histories[0])
-        if target_blk is not None:
-            print("Unflattening graph: Making {0} goto {1}"
-                  .format(dispatcher_father.serial, target_blk.serial))
-            ins_to_copy = [ins for ins in disp_ins if ((ins is not None) and (ins.opcode not in CONTROL_FLOW_OPCODES))]
-
-            if len(ins_to_copy) > 0:
-                print("Instruction copied: {0}: {1}"
-                      .format(len(ins_to_copy),
-                              ", ".join([format_minsn_t(ins_copied) for ins_copied in ins_to_copy])))
-                dispatcher_side_effect_blk = create_block(self.mba.get_mblock(self.mba.qty - 2), ins_to_copy,
-                                                          is_0_way=(target_blk.type == hr.BLT_0WAY))
-                change_1way_block_successor(dispatcher_father, dispatcher_side_effect_blk.serial)
-                change_1way_block_successor(dispatcher_side_effect_blk, target_blk.serial)
-            else:
-                print("else")
-                change_1way_block_successor(dispatcher_father, target_blk.serial)
-            return 2
 
     def get_dispatcher_father_histories(self, dispatcher_father: mblock_t,
                                         dispatcher_entry_block: GenericDispatcherBlockInfo) -> List[MopHistory]:
@@ -592,15 +582,15 @@ class blkOPt(hr.optblock_t):
 if __name__ == '__main__':  # 也可以直接在脚本里执行
     hr.clear_cached_cfuncs()
 
-    # try:
-    #     optimizer = UnflattenerFakeJump()
-    #     optimizer.start()
-    # except Exception as e:
-    #     logging.exception(e)
-
     try:
-        optimizer = blkOPt()
-        optimizer.install()
-        # optimizer.uninstall()
+        optimizer = UnflattenerFakeJump()
+        optimizer.start()
     except Exception as e:
         logging.exception(e)
+
+    # try:
+    #     optimizer = blkOPt()
+    #     optimizer.install()
+    #     # optimizer.uninstall()
+    # except Exception as e:
+    #     logging.exception(e)
