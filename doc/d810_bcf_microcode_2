@@ -1,0 +1,45 @@
+#d810 优化以后的微码内容
+
+; 1WAY-BLOCK 0 FAKE [START=00401130 END=00401130] STK=48/ARG=250, MAXBSP: 0
+; - OUTBOUND: [1]
+
+; 1WAY-BLOCK 1 [START=00401130 END=00401174] STK=48/ARG=250, MAXBSP: 40
+; - INBOUND: [0] OUTBOUND: [2]
+1. 0 mov    edi.4{1}, %var_C.4{1}                 ; 00401167
+1. 1 mov    rsi.8{2}, %var_18.8{2}                ; 0040116A
+
+; 1WAY-BLOCK 2 PROP [START=00401179 END=004011CA] STK=0/ARG=250, MAXBSP: 0
+; - INBOUND: [1] OUTBOUND: [3]
+2. 0 stx    #0.4, ds.2{3}, (&(%0x0).8-#0x10.8){4} ; 004011A1
+2. 1 stx    %var_C.4, ds.2{3}, (&(%0x0).8-#0x10.8){4} ; 004011AA
+2. 2 stx    %var_18.8, ds.2{3}, (&(%0x0).8-#0x10.8){4} ; 004011B0
+2. 3 ldx    ds.2{3}, ([ds.2{3}:(&(%0x0{5}).8-#0x10.8){4}].8+#8.8), rdi.8{6} ; 004011BA
+2. 4 sub    &(%0x0{5}).8, #0x10.8, %var_20.8      ; 004011BD
+2. 5 sub    &(%0x0).8, #0x10.8, %var_28.8         ; 004011C1
+2. 6 mov    call $".atoi"<fast:"const char *nptr" rdi.8{6}>.4, eax.4{7} ; 004011C5
+
+; 1WAY-BLOCK 3 [START=004011CA END=00401213] STK=0/ARG=250, MAXBSP: 0
+; - INBOUND: [2] OUTBOUND: [4]
+3. 0 mov    %var_28.8{8}, rcx.8{8}                ; 004011CA
+3. 1 stx    eax.4{7}, ds.2{9}, %var_28.8{8}       ; 004011CE
+3. 2 setz   [ds.2{9}:rcx.8{8}].4, #0.4, %var_29.1 ; 00401209
+
+; 2WAY-BLOCK 4 [START=00401218 END=00401223] STK=0/ARG=250, MAXBSP: 0
+; - INBOUND: [3] OUTBOUND: [5, 6]
+4. 0 jz     (%var_29.1 & #1.1), #0.1, @6          ; 0040121D
+
+; 1WAY-BLOCK 5 [START=00401261 END=0040129F] STK=0/ARG=250, MAXBSP: 0
+; - INBOUND: [4] OUTBOUND: [7]
+5. 0 stx    #1.4, ds.2, %var_20.8                 ; 00401265
+5. 1 goto   @7                                    ; 00401299
+
+; 1WAY-BLOCK 6 [START=004012A9 END=004012B3] STK=0/ARG=250, MAXBSP: 0
+; - INBOUND: [4] OUTBOUND: [7]
+6. 0 stx    #0xA.4, ds.2, %var_20.8               ; 004012AD
+
+; 1WAY-BLOCK 7 [START=004012B3 END=004012C2] STK=0/ARG=250, MAXBSP: 48
+; - INBOUND: [6, 5] OUTBOUND: [8]
+7. 0 ldx    ds.2, %var_20.8, eax.4                ; 004012B9
+
+; STOP-BLOCK 8 FAKE [START=FFFFFFFFFFFFFFFF END=FFFFFFFFFFFFFFFF] STK=48/ARG=250, MAXBSP: 0
+; - INBOUND: [7]
