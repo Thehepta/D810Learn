@@ -23,10 +23,11 @@ import ida_ida
 import ida_graph
 import ida_lines
 import ida_moves
+from graphviz import Digraph
 
 PLUGIN_NAME = "genmc"
-
-
+global microcode_viewer_instance
+microcode_viewer_instance = None
 # -----------------------------------------------------------------------------
 def get_mcode_name(mcode):
     """returns the name of the mcode_t passed in parameter."""
@@ -70,8 +71,6 @@ def is_installed():
 
 
 # -----------------------------------------------------------------------------
-SELF = __file__
-
 
 def install_plugin():
     """Installs script to IDA userdir as a plugin."""
@@ -79,7 +78,7 @@ def install_plugin():
         kw.msg("Command not available. Plugin already installed.\n")
         return False
 
-    src = SELF
+    src = __file__
     if is_installed():
         btnid = kw.ask_yn(kw.ASKBTN_NO,
                           "File exists:\n\n%s\n\nReplace?" % get_target_filename())
@@ -134,6 +133,68 @@ class printer_t(hr.vd_printer_t):
     def _print(self, indent, line):    # 被东调用，一行的传入microcode反编译结果
         self.mc.append(line)
         return 1
+
+def dominanceFlow(dispatch_block):
+    # import pydevd_pycharm
+    # pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
+
+    print("dispatch_block serial:",hex(dispatch_block.serial))
+    blk_preset_list = [x for x in dispatch_block.predset]
+    print("dispatch_block father list:",blk_preset_list)
+
+    def dfs( current_node, target_node, path, paths, visited):
+        path.append(current_node.serial)
+        visited.add(current_node.serial)
+
+        for neighbor in current_node.succs():
+            if neighbor.serial == target_node.serial and len(path) > 1:
+                paths.append(list(path))
+            elif neighbor.serial not in visited:
+                dfs(neighbor, target_node, path, paths, visited)
+
+        path.pop()
+        visited.remove(current_node.serial)
+    paths = []
+    dfs(dispatch_block,dispatch_block,[],paths,set())
+    for path in paths:
+        print("path:",path)
+
+
+def graphviz(mba,output_path):
+    dot = Digraph()
+    dot.attr(splines='ortho')
+    for blk_idx in range(mba.qty):
+        blk = mba.get_mblock(blk_idx)
+        if blk.head == None:
+            continue
+        lines = []
+
+        lines.append("{0}:{1}".format(blk_idx, hex(blk.head.ea)))
+        insn = blk.head
+        while insn:
+            lines.append(insn.dstr())
+            if insn == blk.tail:
+                break
+            insn = insn.next
+        label = "\n".join(lines)
+        dot.node(str(blk_idx), label=label, shape="rect", style="filled", fillcolor="lightblue")
+
+    for blk_idx in range(mba.qty):
+        blk = mba.get_mblock(blk_idx)
+        succset = [x for x in blk.succset]
+        for succ in succset:
+            blk_succ = mba.get_mblock(succ)
+            if blk_succ.head is None:
+                continue
+            if blk.head is None:
+                continue
+            dot.edge(str(blk_idx), str(succ))
+
+    # dot.render("/home/chic/graph_with_contentgraph_with_content", format="png")
+    with open(output_path, "w") as f:
+        f.write(dot.source)
+    # dot.render("/home/chic/graph_with_content", format="png")
+    print("dot已保存到 :",output_path)
 
 
 # -----------------------------------------------------------------------------
@@ -253,6 +314,8 @@ class dominance_graphviewer_t(microcode_graphviewer_t):
         self.dom_command_id = self.AddCommand("Show Dominance Graph", "D")
         self.full_command_id = self.AddCommand("Show Full Graph", "F")
         self.back_command_id = self.AddCommand("Show Previous Graph", "P")
+        self.save_graphviz_id = self.AddCommand("save Graph to graphviz ", "S")
+        self.show_dom_log_id = self.AddCommand("show current Dominance log ", "A")
         self.state = "cfg"
         self.back_stack = []
         self.select_block = None
@@ -291,6 +354,16 @@ class dominance_graphviewer_t(microcode_graphviewer_t):
                 self.state = "dom"
                 self.Refresh()
                 self.Select(self.select_node)
+        elif cmd_id == self.show_dom_log_id:
+            dominanceFlow(self.select_block)
+        elif cmd_id == self.save_graphviz_id:
+            file_path = kw.ask_file(True, "*.graphviz", "Please select a file")
+            if file_path:
+                kw.msg("Selected file: {}\n".format(file_path))
+                graphviz(self._mba,file_path)
+            else:
+                kw.msg("No file selected\n")
+            print("save_graphviz_id")
 
     def OnClick(self, node_id):
         self.select_node = node_id
@@ -414,13 +487,17 @@ class microcode_viewer_t(kw.simplecustviewer_t):
     """TODO: it's better to handle keyboard input by
     registering an "action" and assigning it a hotkey"""
 
+    def show_microcode_graph(self,shift):
+        print("show_microcode_graph,",shift)
+        g = dominance_graphviewer_t(self._mba, self.title, self.lines)
+        if g:
+            g.Show()
+            self._fit_graph(g)
+            self._dock_widgets(g, dockpos=kw.DP_FLOATING if shift else kw.DP_RIGHT)
+
     def OnKeydown(self, vkey, shift):
         if vkey == ord("G"):
-            g = dominance_graphviewer_t(self._mba, self.title, self.lines)
-            if g:
-                g.Show()
-                self._fit_graph(g)
-                self._dock_widgets(g,dockpos=kw.DP_FLOATING if shift else kw.DP_RIGHT)
+            self.show_microcode_graph(shift)
             return True
         # elif vkey == ord("I"):
         #     """TODO: at some point, the textual representation of the mba
@@ -542,15 +619,16 @@ def show_microcode():
     vp = printer_t()
     mba.set_mba_flags(mba_flags)
     mba._print(vp)     # printer_t 这个是ida系统提供的获取所有microcode 文本内容的类，
-    mcv = microcode_viewer_t()
-    if not mcv.Create(mba, "0x%s-0x%s (%s)" % (addr_fmt % sea, addr_fmt % eea, text), text, fn_name, vp.get_mc()):
+    global microcode_viewer_instance
+    microcode_viewer_instance = microcode_viewer_t()
+    if not microcode_viewer_instance.Create(mba, "0x%s-0x%s (%s)" % (addr_fmt % sea, addr_fmt % eea, text), text, fn_name, vp.get_mc()):
         return (False, "Error creating viewer")
 
-    mcv.Show()
+    microcode_viewer_instance.Show()
     return (True,
             "Successfully generated microcode for 0x%s..0x%s" % (addr_fmt % sea, addr_fmt % eea))
 #-------------------------------------------------------------------------------
-class MyActionHandler(kw.action_handler_t):
+class ActionHandler(kw.action_handler_t):
     def __init__(self, callback):
         super().__init__()
         self.callback = callback
@@ -565,10 +643,12 @@ class MyActionHandler(kw.action_handler_t):
 #------------------------------------------------------------------------------
 # 添加菜单
 def register_actions():
+    global microcode_viewer_instance
+
     action1 = kw.action_desc_t(
         "my:action1",  # 唯一标识符
-        "show Code FlowChart   G",    # 菜单显示名称
-        MyActionHandler(lambda: print("show Code FlowChart   G")),
+        "show Code FlowChart   G！",    # 菜单显示名称
+        ActionHandler(lambda: microcode_viewer_instance.show_microcode_graph(0)),
         None,          # 热键
         "show Code FlowChart   G",  # 提示信息
         -1             # 图标
@@ -576,7 +656,7 @@ def register_actions():
     action2 = kw.action_desc_t(
         "my:action2",
         "Option 2",
-        MyActionHandler(lambda: print("Option 2 selected")),
+        ActionHandler(lambda: print("Option 2 selected")),
         None,
         "Select Option 2",
         -1

@@ -1,0 +1,169 @@
+# bcf d810优化以后  MMAT_LOCOPT 显示内容,可能是未优化的数据,用来跟原数据进行对比更原数据进行对比
+; 1WAY-BLOCK 0 FAKE [START=00401130 END=00401130] STK=0/ARG=50, MAXBSP: 0
+; - OUTBOUND: [1]
+
+; 1WAY-BLOCK 1 [START=00401130 END=00401174] STK=0/ARG=50, MAXBSP: 40
+; - INBOUND: [0] OUTBOUND: [3]
+1. 0 mov    rsp.8, rbp.8                          ; 00401131
+1. 1 xdu    $y.4, rcx.8                           ; 00401140
+1. 2 xdu    ($x.4-#1.4), rdx.8                    ; 00401149
+1. 3 mov    #0.8, rax.8                           ; 0040114F
+1. 4 setl   $y.4, #0xA.4, r9.1                    ; 0040115C
+1. 5 mov    #1.1, r8.1                            ; 00401160
+1. 6 mov    #0.1, cf.1                            ; 00401163
+1. 7 mov    #0.1, of.1                            ; 00401163
+1. 8 mov    #0.1, zf.1                            ; 00401163
+1. 9 setp   #1.1, #0.1, pf.1                      ; 00401163
+1.10 mov    #0.1, sf.1                            ; 00401163
+1.11 mov    edi.4, %var_C.4                       ; 00401167
+1.12 mov    rsi.8, %var_18.8                      ; 0040116A
+1.13 goto   @3                                    ; 0040116E
+
+; 1WAY-BLOCK 2 [START=00401174 END=00401179] STK=0/ARG=50, MAXBSP: 0
+; - OUTBOUND: [15]
+2. 0 goto   @15                                   ; 00401174
+
+; 1WAY-BLOCK 3 [START=00401179 END=004011CA] STK=0/ARG=50, MAXBSP: 0
+; - INBOUND: [1, 16] OUTBOUND: [4]
+3. 0 sub    rsp.8, #0x10.8, rax.8                 ; 0040117C
+3. 1 mov    rsp.8, rsi.8                          ; 00401197
+3. 2 cfadd  rsp.8, #-0x10.8, cf.1                 ; 0040119A
+3. 3 ofadd  #-0x10.8, rsp.8, of.1                 ; 0040119A
+3. 4 setz   rsp.8, #0x10.8, zf.1                  ; 0040119A
+3. 5 setp   rsp.8, #0x10.8, pf.1                  ; 0040119A
+3. 6 sets   (rsi.8-#0x10.8), sf.1                 ; 0040119A
+3. 7 sub    rsp.8, #0x10.8, rsi.8                 ; 0040119A
+3. 8 stx    #0.4, ds.2, rax.8                     ; 004011A1
+3. 9 stx    %var_C.4, ds.2, (rsp.8-#0x10.8)       ; 004011AA
+3.10 mov    %var_18.8, rcx.8                      ; 004011AC
+3.11 stx    %var_18.8, ds.2, (rsp.8-#0x10.8)      ; 004011B0
+3.12 ldx    ds.2, (rsp.8-#0x10.8), rdx.8          ; 004011B3
+3.13 ldx    ds.2, (rdx.8+#8.8), rdx.8             ; 004011B6
+3.14 mov    rdx.8, rdi.8                          ; 004011BA
+3.15 sub    rsp.8, #0x10.8, %var_20.8             ; 004011BD
+3.16 sub    rsp.8, #0x10.8, %var_28.8             ; 004011C1
+3.17 call   $".atoi"                              ; 004011C5
+
+; 1WAY-BLOCK 4 [START=004011CA END=00401213] STK=0/ARG=50, MAXBSP: 0
+; - INBOUND: [3] OUTBOUND: [6]
+4. 0 mov    %var_28.8, rcx.8                      ; 004011CA
+4. 1 stx    eax.4, ds.2, %var_28.8                ; 004011CE
+4. 2 setz   [ds.2:rcx.8].4, #0.4, r8.1            ; 004011D3
+4. 3 xdu    $y.4, r9.8                            ; 004011DE
+4. 4 xdu    ($x.4-#1.4), r10.8                    ; 004011E9
+4. 5 mov    #0.8, rax.8                           ; 004011F1
+4. 6 setl   $y.4, #0xA.4, bl.1                    ; 004011FF
+4. 7 mov    #1.1, r11.1                           ; 00401202
+4. 8 mov    #0.1, cf.1                            ; 00401205
+4. 9 mov    #0.1, of.1                            ; 00401205
+4.10 mov    #0.1, zf.1                            ; 00401205
+4.11 setp   #1.1, #0.1, pf.1                      ; 00401205
+4.12 mov    #0.1, sf.1                            ; 00401205
+4.13 setz   [ds.2:rcx.8].4, #0.4, %var_29.1       ; 00401209
+4.14 goto   @6                                    ; 0040120D
+
+; 1WAY-BLOCK 5 [START=00401213 END=00401218] STK=0/ARG=50, MAXBSP: 0
+; - OUTBOUND: [15]
+5. 0 goto   @15                                   ; 00401213
+
+; 2WAY-BLOCK 6 [START=00401218 END=00401223] STK=0/ARG=50, MAXBSP: 0
+; - INBOUND: [4] OUTBOUND: [7, 8]
+6. 0 mov    %var_29.1, al.1                       ; 00401218
+6. 1 mov    #0.1, cf.1                            ; 0040121B
+6. 2 mov    #0.1, of.1                            ; 0040121B
+6. 3 setz   (%var_29.1 & #1.1), #0.1, zf.1        ; 0040121B
+6. 4 setp   (%var_29.1 & #1.1), #0.1, pf.1        ; 0040121B
+6. 5 mov    #0.1, sf.1                            ; 0040121B
+6. 6 jnz    (%var_29.1 & #1.1), #0.1, @8          ; 0040121D
+
+; 1WAY-BLOCK 7 [START=00401223 END=00401228] STK=0/ARG=50, MAXBSP: 0
+; - INBOUND: [6] OUTBOUND: [13]
+7. 0 goto   @13                                   ; 00401223
+
+; 1WAY-BLOCK 8 [START=00401228 END=0040125C] STK=0/ARG=50, MAXBSP: 0
+; - INBOUND: [6] OUTBOUND: [10]
+8. 0 xdu    $y.4, rcx.8                           ; 0040122F
+8. 1 xdu    ($x.4-#1.4), rdx.8                    ; 00401238
+8. 2 mov    #0.8, rax.8                           ; 0040123E
+8. 3 setl   $y.4, #0xA.4, di.1                    ; 0040124B
+8. 4 mov    #1.1, si.1                            ; 0040124F
+8. 5 mov    #0.1, cf.1                            ; 00401252
+8. 6 mov    #0.1, of.1                            ; 00401252
+8. 7 mov    #0.1, zf.1                            ; 00401252
+8. 8 setp   #1.1, #0.1, pf.1                      ; 00401252
+8. 9 mov    #0.1, sf.1                            ; 00401252
+8.10 goto   @10                                   ; 00401256
+
+; 1WAY-BLOCK 9 [START=0040125C END=00401261] STK=0/ARG=50, MAXBSP: 0
+; - OUTBOUND: [17]
+9. 0 goto   @17                                   ; 0040125C
+
+; 1WAY-BLOCK 10 [START=00401261 END=0040129F] STK=0/ARG=50, MAXBSP: 0
+; - INBOUND: [8, 17] OUTBOUND: [12]
+10. 0 mov    %var_20.8, rax.8                     ; 00401261
+10. 1 stx    #1.4, ds.2, %var_20.8                ; 00401265
+10. 2 xdu    $y.4, rdx.8                          ; 00401272
+10. 3 xdu    ($x.4-#1.4), rsi.8                   ; 0040127B
+10. 4 mov    #0.8, rcx.8                          ; 00401281
+10. 5 setl   $y.4, #0xA.4, r8.1                   ; 0040128E
+10. 6 mov    #1.1, di.1                           ; 00401292
+10. 7 mov    #0.1, cf.1                           ; 00401295
+10. 8 mov    #0.1, of.1                           ; 00401295
+10. 9 mov    #0.1, zf.1                           ; 00401295
+10.10 setp   #1.1, #0.1, pf.1                     ; 00401295
+10.11 mov    #0.1, sf.1                           ; 00401295
+10.12 goto   @12                                  ; 00401299
+
+; 1WAY-BLOCK 11 [START=0040129F END=004012A4] STK=0/ARG=50, MAXBSP: 0
+; - OUTBOUND: [17]
+11. 0 goto   @17                                  ; 0040129F
+
+; 1WAY-BLOCK 12 [START=004012A4 END=004012A9] STK=0/ARG=50, MAXBSP: 0
+; - INBOUND: [10] OUTBOUND: [14]
+12. 0 goto   @14                                  ; 004012A4
+
+; 1WAY-BLOCK 13 [START=004012A9 END=004012B3] STK=0/ARG=50, MAXBSP: 0
+; - INBOUND: [7] OUTBOUND: [14]
+13. 0 mov    %var_20.8, rax.8                     ; 004012A9
+13. 1 stx    #0xA.4, ds.2, %var_20.8              ; 004012AD
+
+; 1WAY-BLOCK 14 [START=004012B3 END=004012C2] STK=0/ARG=50, MAXBSP: 48
+; - INBOUND: [12, 13] OUTBOUND: [18]
+14. 0 xdu    [ds.2:%var_20.8].4, rcx.8            ; 004012B7
+14. 1 xdu    [ds.2:%var_20.8].4, rax.8            ; 004012B9
+14. 2 goto   @18                                  ; 004012C1
+
+; 1WAY-BLOCK 15 [START=004012C2 END=0040130F] STK=0/ARG=50, MAXBSP: 0
+; - INBOUND: [2, 5] OUTBOUND: [16]
+15. 0 sub    rsp.8, #0x10.8, rdx.8                ; 004012D9
+15. 1 mov    rsp.8, rsi.8                         ; 004012E0
+15. 2 cfadd  rsp.8, #-0x10.8, cf.1                ; 004012E3
+15. 3 ofadd  #-0x10.8, rsp.8, of.1                ; 004012E3
+15. 4 setz   rsp.8, #0x10.8, zf.1                 ; 004012E3
+15. 5 setp   rsp.8, #0x10.8, pf.1                 ; 004012E3
+15. 6 sets   (rsi.8-#0x10.8), sf.1                ; 004012E3
+15. 7 sub    rsp.8, #0x10.8, rsi.8                ; 004012E3
+15. 8 stx    #0.4, ds.2, (rsp.8-#0x10.8)          ; 004012EA
+15. 9 stx    %var_C.4, ds.2, (rsp.8-#0x10.8)      ; 004012F3
+15.10 mov    %var_18.8, rax.8                     ; 004012F5
+15.11 stx    %var_18.8, ds.2, rdx.8               ; 004012F9
+15.12 ldx    ds.2, (rsp.8-#0x10.8), rcx.8         ; 004012FC
+15.13 ldx    ds.2, (rcx.8+#8.8), rcx.8            ; 004012FF
+15.14 mov    rcx.8, rdi.8                         ; 00401303
+15.15 sub    rsp.8, #0x10.8, %var_38.8            ; 00401306
+15.16 call   $".atoi"                             ; 0040130A
+
+; 1WAY-BLOCK 16 [START=0040130F END=0040131A] STK=0/ARG=50, MAXBSP: 0
+; - INBOUND: [15] OUTBOUND: [3]
+16. 0 mov    %var_38.8, rcx.8                     ; 0040130F
+16. 1 stx    eax.4, ds.2, %var_38.8               ; 00401313
+16. 2 goto   @3                                   ; 00401315
+
+; 1WAY-BLOCK 17 [START=0040131A END=00401329] STK=0/ARG=50, MAXBSP: 0
+; - INBOUND: [9, 11] OUTBOUND: [10]
+17. 0 mov    %var_20.8, rax.8                     ; 0040131A
+17. 1 stx    #1.4, ds.2, %var_20.8                ; 0040131E
+17. 2 goto   @10                                  ; 00401324
+
+; STOP-BLOCK 18 FAKE [START=FFFFFFFFFFFFFFFF END=FFFFFFFFFFFFFFFF] STK=0/ARG=50, MAXBSP: 0
+; - INBOUND: [14]

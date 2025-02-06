@@ -17,9 +17,52 @@ from ida_hexrays import mblock_t, mop_t, optblock_t, minsn_visitor_t, mbl_array_
 import ida_hexrays as hr
 import ida_kernwin as kw
 import logging
+from graphviz import Digraph
+from datetime import datetime
+
 
 
 FLATTENING_JUMP_OPCODES = [hr.m_jnz, hr.m_jz, hr.m_jae, hr.m_jb, hr.m_ja, hr.m_jbe,hr.m_jg, hr.m_jge, hr.m_jl, hr.m_jle]
+
+def graphviz(mba,output_path):
+    ads_file_path = output_path +".dot"
+    dot = Digraph()
+    dot.attr(splines='ortho')
+    for blk_idx in range(mba.qty):
+        blk = mba.get_mblock(blk_idx)
+        if blk.head == None:
+            continue
+        lines = []
+
+        lines.append("{0}:{1}".format(blk_idx, hex(blk.head.ea)))
+        insn = blk.head
+        while insn:
+            lines.append(insn.dstr())
+            if insn == blk.tail:
+                break
+            insn = insn.next
+        label = "\n".join(lines)
+        dot.node(str(blk_idx), label=label, shape="rect", style="filled", fillcolor="lightblue")
+
+    for blk_idx in range(mba.qty):
+        blk = mba.get_mblock(blk_idx)
+        succset = [x for x in blk.succset]
+        for succ in succset:
+            blk_succ = mba.get_mblock(succ)
+            if blk_succ.head is None:
+                continue
+            if blk.head is None:
+                continue
+            dot.edge(str(blk_idx), str(succ))
+
+    # dot.render("/home/chic/graph_with_contentgraph_with_content", format="png")
+    with open(ads_file_path, "w") as f:
+        f.write(dot.source)
+    # dot.render("/home/chic/graph_with_content", format="png")
+    print("dot已保存到 :",ads_file_path)
+
+
+
 
 class adjustOllvmDispatcherInfo(GenericDispatcherInfo):
 
@@ -48,12 +91,12 @@ class adjustOllvmDispatcherInfo(GenericDispatcherInfo):
             return False
         # Its fathers are not conditional branch with this mop
         #fix 1.so文件分发器识别中， 下面这部分代码，遍历所有的分发器的前驱，如果前驱有值，但是不能是hr.EQ_IGNSIZE(这个应该是判断条件跳转的)指令，这个可能是由子分发器引起的问题
-        # for father_serial in blk.predset:
-        #     father_blk = self.mba.get_mblock(father_serial)
-        #     father_num_mop, father_mop_compared = self._get_comparison_info(father_blk)
-        #     if (father_num_mop is not None) and (father_mop_compared is not None):
-        #         if mop_compared.equal_mops(father_mop_compared, hr.EQ_IGNSIZE):
-        #             return False
+        for father_serial in blk.predset:
+            father_blk = self.mba.get_mblock(father_serial)
+            father_num_mop, father_mop_compared = self._get_comparison_info(father_blk)
+            if (father_num_mop is not None) and (father_mop_compared is not None):
+                if mop_compared.equal_mops(father_mop_compared, hr.EQ_IGNSIZE):
+                    return False
         return True
 
     def _get_comparison_info(self, blk: mblock_t) -> Tuple[mop_t, mop_t]:
@@ -167,41 +210,24 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
         self.MOP_TRACKER_MAX_NB_PATH = 100
 
     def func(self, blk: mblock_t):
-
+        # import pydevd_pycharm
+        # pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
         self.mba = blk.mba
         self.last_pass_nb_patch_done = 0
         if blk.mba.maturity != hr.MMAT_GLBOPT2:
             return 0
         if True == self.set_dispatch_block(25):
+            now = datetime.now()
+            graphviz(self.mba,"/home/chic/unfla/"+now.strftime("%H-%M-%S-%f"))
+            if len(self.dispatcher_list) == 0:
+                logging.info("No dispatcher found at maturity {0}".format(self.mba.maturity))
+                return 0
             print("dispatcher_list = ",len(self.dispatcher_list))
             self.last_pass_nb_patch_done = self.remove_flattening()
         else:
             print("add dispatch failed")
 
-        # if True == self.set_dispatch_block(3):
-        #     print("dispatcher_list = ",len(self.dispatcher_list))
-        #     self.last_pass_nb_patch_done = self.remove_flattening()
-        # else:
-        #     print("add dispatch failed")
-        # if not self.check_if_rule_should_be_used(blk):
-        #     return 0
-        # self.last_pass_nb_patch_done = 0
-        # logging.info("Unflattening at maturity {0} pass {1}".format(self.cur_maturity, self.cur_maturity_pass))
-        # self.retrieve_all_dispatchers()
-        # if len(self.dispatcher_list) == 0:
-        #     logging.info("No dispatcher found at maturity {0}".format(self.mba.maturity))
-        #     return 0
-        # else:
-        #     logging.info("Unflattening: {0} dispatcher(s) found".format(len(self.dispatcher_list)))
-        #     for dispatcher_info in self.dispatcher_list:
-        #         dispatcher_info.print_info()
-        #     self.last_pass_nb_patch_done = self.remove_flattening()
-        # logging.info("Unflattening at maturity {0} pass {1}: {2} changes"
-        #                    .format(self.cur_maturity, self.cur_maturity_pass, self.last_pass_nb_patch_done))
-        # nb_clean = mba_deep_cleaning(self.mba, False)
-        # if self.last_pass_nb_patch_done + nb_clean + self.non_significant_changes > 0:
-        #     self.mba.mark_chains_dirty()
-        #     self.mba.optimize_local(0)
+
         self.mba.verify(True)
         return self.last_pass_nb_patch_done
 
@@ -242,17 +268,17 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
         self.mba = hr.gen_microcode(mbr, hf, ml, hr.DECOMP_WARNINGS, mmat)
         # import pydevd_pycharm
         # pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
-        if True == self.set_dispatch_block(25):
-            print("dispatcher_list = ",len(self.dispatcher_list))
-            self.last_pass_nb_patch_done = self.remove_flattening()
-        else:
-            print("add dispatch failed")
-
         if True == self.set_dispatch_block(3):
             print("dispatcher_list = ",len(self.dispatcher_list))
             self.last_pass_nb_patch_done = self.remove_flattening()
         else:
             print("add dispatch failed")
+
+        # if True == self.set_dispatch_block(3):
+        #     print("dispatcher_list = ",len(self.dispatcher_list))
+        #     self.last_pass_nb_patch_done = self.remove_flattening()
+        # else:
+        #     print("add dispatch failed")
 
 
     def set_dispatch_block(self,block_serial) -> bool:
@@ -271,11 +297,10 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
         # self.dispatcher_list = [x for x in self.dispatcher_collector.get_dispatcher_list()]
 
     def remove_flattening(self) -> int:
-        # import pydevd_pycharm
-        # pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
+
         total_nb_change = 0
         for dispatcher_info in self.dispatcher_list:
-            print("dispatcher_info:",hex(dispatcher_info.entry_block.blk.start))
+            print("dispatcher_info:",hex(dispatcher_info.entry_block.blk.start),"dispatcher_info_block:",dispatcher_info.entry_block.blk.serial)
             dispatcher_father_list = [self.mba.get_mblock(x) for x in dispatcher_info.entry_block.blk.predset]
             for dispatcher_father in dispatcher_father_list:
                 try:
@@ -303,8 +328,8 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
                                                             verbose=False)
 
         ref_mop_searched_values = mop_searched_values_list[0]
-        print("entry_block:", dispatcher_father.serial)
-        print("cvlist:", len(mop_searched_values_list))
+        print("dispatcher_father.serial:", dispatcher_father.serial)
+        print("branch count :", len(mop_searched_values_list))
 
         for tmp_mop_searched_values in mop_searched_values_list:
             if tmp_mop_searched_values != ref_mop_searched_values:
@@ -351,15 +376,15 @@ class blkOPt(hr.optblock_t):
 if __name__ == '__main__':      #也可以直接在脚本里执行
     hr.clear_cached_cfuncs()
 
-    # try:
-    #     optimizer = UnflattenerFakeJump()
-    #     # optimizer.install()
-    #     optimizer.start()
-    # except Exception as e:
-    #     logging.exception(e)
-
     try:
-        optimizer = blkOPt()
-        optimizer.install()
+        optimizer = UnflattenerFakeJump()
+        # optimizer.install()
+        optimizer.start()
     except Exception as e:
         logging.exception(e)
+
+    # try:
+    #     optimizer = blkOPt()
+    #     optimizer.install()
+    # except Exception as e:
+    #     logging.exception(e)
