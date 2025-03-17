@@ -489,9 +489,8 @@ class microcode_viewer_t(kw.simplecustviewer_t):
 
     def show_microcode_graph(self,shift):
         print("show_microcode_graph,",shift)
-        g = dominance_graphviewer_t(self._mba, self.title, self.lines)
+        g = show_microcode_graph(self._mba, self.title, self.lines)
         if g:
-            g.Show()
             self._fit_graph(g)
             self._dock_widgets(g, dockpos=kw.DP_FLOATING if shift else kw.DP_RIGHT)
 
@@ -627,6 +626,22 @@ def show_microcode():
     microcode_viewer_instance.Show()
     return (True,
             "Successfully generated microcode for 0x%s..0x%s" % (addr_fmt % sea, addr_fmt % eea))
+
+def show_microcode_graph(mba,fn_name,lines=None):
+    if lines == None:
+        vp = printer_t()
+        mba.set_mba_flags(mba.get_mba_flags())
+        mba._print(vp)
+        g = dominance_graphviewer_t(mba, fn_name, vp.get_mc())
+        if g:
+            g.Show()
+        return g
+    else:
+        g = dominance_graphviewer_t(mba, fn_name, lines)
+        if g:
+            g.Show()
+        return g
+
 #-------------------------------------------------------------------------------
 class ActionHandler(kw.action_handler_t):
     def __init__(self, callback):

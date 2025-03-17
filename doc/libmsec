@@ -1,0 +1,18 @@
+father_blk:28 is not add dispatch
+blk.tail : jnz    r1.4{19}, #0x15B28002.4, @17 mop_compared:r1.4{19}  -  father_mop_comparedr1.4{19}
+jnz    r1.4{19}, #0x15B28002.4, @17
+
+
+father_blk:46 is not add dispatch
+blk.tail : jnz    r1.4{19}, #0xCFEC6CDA.4, @17 mop_compared:r1.4{19}  -  father_mop_comparedr1.4{19}
+jnz    r1.4{19}, #0xCFEC6CDA.4, @17
+
+
+father_blk:65 is not add dispatch
+blk.tail : jnz    r1.4{19}, #0xDD392BCC.4, @17 mop_compared:r1.4{19}  -  father_mop_comparedr1.4{19}
+jnz    r1.4{19}, #0xDD392BCC.4, @17
+
+
+father_blk:70 is not add dispatch
+blk.tail : jnz    r1.4{19}, #0x9489B58.4, @17 mop_compared:r1.4{19}  -  father_mop_comparedr1.4{19}
+jnz    r1.4{19}, #0x9489B58.4, @17
