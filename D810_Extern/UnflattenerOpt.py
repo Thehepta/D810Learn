@@ -7,6 +7,7 @@ import ida_bytes
 import ida_idaapi
 from ida_hexrays import *
 import logging
+from d810.optimizers.flow.flattening.utils import NotResolvableFatherException, get_all_possibles_values
 
 FAKE_LOOP_OPCODES = [m_jz, m_jnz,m_jg]
 

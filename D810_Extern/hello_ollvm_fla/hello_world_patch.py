@@ -1,10 +1,13 @@
+import genmy
 import ida_hexrays as hr
 import logging
 
+from d810.cfg_utils import insert_nop_blk
 from ida_hexrays import minsn_t, m_goto, mop_t
 from ida_hexrays import mblock_t
 from ida_hexrays import mbl_array_t
 from ida_hexrays import m_ijmp, m_call, MMAT_CALLS, BLT_1WAY, MBL_GOTO
+from typing import List, Union, Dict, Tuple
 
 
 def insert_goto_instruction(blk: hr.mblock_t, goto_blk_serial: int, nop_previous_instruction=False):
@@ -82,7 +85,30 @@ def change_1way_block_successor(blk: mblock_t, blk_successor_serial: int) -> boo
 
 
 
+
+
+def duplicate_block(block_to_duplicate: mblock_t) -> Tuple[mblock_t, mblock_t]:
+    mba = block_to_duplicate.mba
+    duplicated_blk = mba.copy_block(block_to_duplicate, mba.qty - 1)
+    duplicated_blk_default = None
+    if (block_to_duplicate.tail is not None) and hr.is_mcode_jcond(block_to_duplicate.tail.opcode):
+        block_to_duplicate_default_successor = mba.get_mblock(block_to_duplicate.serial + 1)
+        duplicated_blk_default = insert_nop_blk(duplicated_blk)
+        change_1way_block_successor(duplicated_blk_default, block_to_duplicate.serial + 1)
+
+    elif duplicated_blk.nsucc() == 1:
+        change_1way_block_successor(duplicated_blk, block_to_duplicate.succset[0])
+    elif duplicated_blk.nsucc() == 0:
+        print("  Duplicated block {0} has no successor => Nothing to do".format(duplicated_blk.serial))
+
+
+
+    return duplicated_blk, duplicated_blk_default
+
+
+
 class blkOPt(hr.optblock_t):
+    first = False
 
     def func(self, blk):
         if blk.head is None:
@@ -93,24 +119,40 @@ class blkOPt(hr.optblock_t):
         # import pydevd_pycharm
         # pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, s tderrToServer=True)
 
-
         if blk.serial == 8:
-            if blk.succset[0] == 5:
-                return 0
-            print("First only ->>>>>>>>>>>>>>>>>>>>>>")
-            blk_8 = None
-            blk_1 = None
-            for blk_idx in range(blk.mba.qty):
-                blk_mtp = blk.mba.get_mblock(blk_idx)
-                if blk_mtp.serial == 1:
-                    blk_1 = blk_mtp
-
-                if blk_mtp.serial == 8:
-                    blk_8 = blk_mtp
-
-            change_1way_block_successor(blk_1, 6)
-            change_1way_block_successor(blk_8, 5)
+            if blkOPt.first == False:
+                duplicate_block(blk)
+                blkOPt.first = True
+            # if blk.succset[0] == 5:
+            #     return 0
+            # print("First only ->>>>>>>>>>>>>>>>>>>>>>")
+            # blk_8 = None
+            # blk_1 = None
+            # blk_9 = None
+            # blk_10 = None
+            # blk_11 = None
+            # for blk_idx in range(blk.mba.qty):
+            #     blk_mtp = blk.mba.get_mblock(blk_idx)
+            #     if blk_mtp.serial == 1:
+            #         blk_1 = blk_mtp
+            #     if blk_mtp.serial == 8:
+            #         blk_8 = blk_mtp
+            #     if blk_mtp.serial == 9:
+            #         blk_9 = blk_mtp
+            #     if blk_mtp.serial == 10:
+            #         blk_10 = blk_mtp
+            #     if blk_mtp.serial == 11:
+            #         blk_11 = blk_mtp
+            # change_1way_block_successor(blk_1, 6)
+            # change_1way_block_successor(blk_8, 5)
+            # change_1way_block_successor(blk_9, 5)
+            # change_1way_block_successor(blk_10, 5)
+            # change_1way_block_successor(blk_11, 9)
             return 1
+        # if blk.mba.maturity != hr.MMAT_GLBOPT2:
+        #     if blk.serial == 8:
+        #         genmy.show_microcode_graph(blk.mba, "null")
+
         # return 0
 
         # if blk.serial == 1:

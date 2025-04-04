@@ -303,6 +303,7 @@ def show_microcode():
     if not sel and pfn:
         sea = pfn.start_ea
         eea = pfn.end_ea
+        print("function:{0}-{1}".format(sea, eea))
 
     addr_fmt = "%016x" if ida_ida.inf_is_64bit() else "%08x"
     fn_name = (ida_funcs.get_func_name(pfn.start_ea)
@@ -321,7 +322,6 @@ def show_microcode():
     else:
         mbr = hr.mba_ranges_t()
         mbr.ranges.push_back(ida_range.range_t(sea, eea))
-
     hf = hr.hexrays_failure_t()
     ml = hr.mlist_t()
     mba = hr.gen_microcode(mbr, hf, ml, hr.DECOMP_WARNINGS, mmat)
