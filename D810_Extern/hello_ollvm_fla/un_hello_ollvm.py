@@ -227,21 +227,26 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
         # import pydevd_pycharm
         # pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
         total_nb_change = 0
+        # 每有一个分发器调用一次
         for dispatcher_info in self.dispatcher_list:
             print("dispatcher_info:",hex(dispatcher_info.entry_block.blk.start))
             dispatcher_father_list = [self.mba.get_mblock(x) for x in dispatcher_info.entry_block.blk.predset]
+            # 获取当前分发起的所有前驱进行循环
             for dispatcher_father in dispatcher_father_list:
                 try:
+                    # 每个前驱进行一次调用,确保分发器的前驱都是可以正常修补的,如果有问题,重新进行处理
                     total_nb_change += self.ensure_dispatcher_father_is_resolvable(dispatcher_father,
                                                                                    dispatcher_info.entry_block)
                 except NotDuplicableFatherException as e:
                     print(e)
                     pass
-
+            # 在这里程序开始修复了了
+            # 这林需要再次获取一次分发器的前驱,因为前面在处理前驱可修复问题的时候,可能会添加新前驱,这里更新所有前驱
             dispatcher_father_list = [self.mba.get_mblock(x) for x in dispatcher_info.entry_block.blk.predset]
             nb_flattened_branches = 0
             for dispatcher_father in dispatcher_father_list:
                 try:
+                    # 还原,分发器到分发器的前驱这条代码路径的混淆
                     nb_flattened_branches += self.resolve_dispatcher_father(dispatcher_father, dispatcher_info)
                 except NotResolvableFatherException as e:
                     print("NotResolvableFatherException")
@@ -273,11 +278,13 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
 
 
     def resolve_dispatcher_father(self, dispatcher_father: mblock_t, dispatcher_info) -> int:
+        #  收集分发器到前驱之间的路径中的相关MOP,一般来说只有一个,是正常的,
         dispatcher_father_histories = self.get_dispatcher_father_histories(dispatcher_father,
                                                                            dispatcher_info.entry_block)
         # father_is_resolvable = self.check_if_histories_are_resolved(dispatcher_father_histories)
         # if not father_is_resolvable:
         #     raise NotResolvableFatherException("Can't fix block {0}".format(dispatcher_father.serial))
+        # 在这里,会去仿真执行,然后获取分支中这个mop的值
         mop_searched_values_list = get_all_possibles_values(dispatcher_father_histories,
                                                             dispatcher_info.entry_block.use_before_def_list,
                                                             verbose=False)
@@ -300,6 +307,7 @@ class UnflattenerFakeJump(GenericDispatcherUnflatteningRule):
             ins_to_copy = [ins for ins in disp_ins if ((ins is not None) and (ins.opcode not in CONTROL_FLOW_OPCODES))]
 
             if len(ins_to_copy) > 0:
+                # 这个脚本不会走这个,别的脚本会有完整的
                 print("Instruction copied: {0}: {1}"
                                    .format(len(ins_to_copy),
                                            ", ".join([format_minsn_t(ins_copied) for ins_copied in ins_to_copy])))

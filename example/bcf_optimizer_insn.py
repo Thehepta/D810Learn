@@ -6,14 +6,6 @@ from d810.ast import minsn_to_ast, AstNode, AstLeaf, AstConstant
 # 这个指令优化是作用域microcode层面的，会根据不同的成熟度，各调用你一次，同时每个成熟度生成的每一条指令一会调用一次，每一条指令跟生成的miocrocode 是对应的
 
 
-def signature_generator(ref_sig):
-    for i, x in enumerate(ref_sig):
-        if x not in ["N", "L"]:
-            for sig_suffix in signature_generator(ref_sig[i + 1:]):
-                yield ref_sig[:i] + ["L"] + sig_suffix
-    yield ref_sig
-
-
 class sample_optimizer_t(ida_hexrays.optinsn_t):
 
     def __init__(self):
@@ -72,24 +64,10 @@ class sample_optimizer_t(ida_hexrays.optinsn_t):
         mop_num.make_number(0, 8)
         new_instruction.opcode = ida_hexrays.m_mov
         new_instruction.l = mop_num
-        # mop_reg = ida_hexrays.mop_t()
-        # mop_reg.make_reg(16)
+
         new_instruction.d = test_ast.dst.mop
-        # is_ok = self.replace.update_leafs_mop(candidate_pattern)
-        # if not is_ok:
-        #     return None
-        # new_instruction = ida_hexrays.minsn_t(test_ast.ea)
-        # new_instruction.opcode = ida_hexrays.m_mov
-        # new_instruction.l = ida_hexrays.mop_t(test_ast.d, 8)  # 左操作数
-        # new_instruction = self.get_replacement(candidate_pattern)
-        # # print("fix:",new_ins)
-        # return new_instruction
+
         return new_instruction
-
-    def get_replacement(self, candidate: AstNode):
-
-        new_ins = self.replace.create_minsn(candidate.ea, candidate.dst_mop)
-        return new_ins
 
 
 class InstructionVisitorManager(ida_hexrays.minsn_visitor_t):

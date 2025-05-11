@@ -4,6 +4,8 @@ summary: list instruction registers
 description:
   Shows a list of direct references to a register from the
   current instruction.
+
+level: advanced
 """
 
 import ida_pro
@@ -19,7 +21,7 @@ def collect_block_xrefs(out, mlist, blk, ins, find_uses):
         use = blk.build_use_list(p, ida_hexrays.MUST_ACCESS); # things used by the insn
         _def = blk.build_def_list(p, ida_hexrays.MUST_ACCESS); # things defined by the insn
         plst = use if find_uses else _def
-        if mlist.has_common(plst):
+        if mlist.has_common(plst):   # 是否把包含
             if not p.ea in out:
                 out.append(p.ea) # this microinstruction seems to use our operand
         mlist.sub(_def)
@@ -87,12 +89,9 @@ def show_xrefs(ea, gco, xrefs, ndefs):
         ida_kernwin.jumpto(xrefs[i])
 
 
-import pydevd_pycharm
-pydevd_pycharm.settrace('localhost', port=31235, stdoutToServer=True, stderrToServer=True)
 if ida_hexrays.init_hexrays_plugin():
     ea = ida_kernwin.get_screen_ea()
     pfn = ida_funcs.get_func(ea)
-    pfn = ida_kernwin(ea)
     w = ida_kernwin.warning
     if pfn:
         F = ida_bytes.get_flags(ea)

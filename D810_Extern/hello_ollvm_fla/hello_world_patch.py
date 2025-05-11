@@ -100,7 +100,13 @@ def duplicate_block(block_to_duplicate: mblock_t) -> Tuple[mblock_t, mblock_t]:
         change_1way_block_successor(duplicated_blk, block_to_duplicate.succset[0])
     elif duplicated_blk.nsucc() == 0:
         print("  Duplicated block {0} has no successor => Nothing to do".format(duplicated_blk.serial))
-
+    duplicated_blk_pre = duplicated_blk.serial - 1
+    duplicated_pre_blk = mba.get_mblock(duplicated_blk_pre)
+    if duplicated_pre_blk.tail.opcode == hr.m_goto:
+        print("{0} is_simple_goto_block ".format(duplicated_pre_blk.serial))
+    else:
+        print("change_1way_block_successor {0} -> {1}".format(duplicated_pre_blk.serial,duplicated_blk.serial+1),
+        change_1way_block_successor(duplicated_pre_blk, duplicated_blk.serial+1))
 
 
     return duplicated_blk, duplicated_blk_default
